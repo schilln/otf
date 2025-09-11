@@ -1,0 +1,6 @@
+argnames
+cmap
+figsize
+jndarray
+ndarray
+zlim

@@ -1,0 +1,19 @@
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Unit test / coverage reports
+.coverage
+
+# Virtual environments
+.venv
+
+# VS Code
+*.vscode

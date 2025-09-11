@@ -1,0 +1,29 @@
+[project]
+name = "otf"
+version = "0.1.0"
+description = "A package implementing the on-the-fly (OTF) method of data assimilation"
+readme = "README.md"
+authors = [
+    { name = "Nathan Schill", email = "nateschill@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "jax>=0.6.2",
+    "numpy>=2.2.6",
+    "optax>=0.2.5",
+    "scipy>=1.15.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.8,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.30.1",
+    "matplotlib>=3.10.6",
+    "nb-clean>=4.0.1",
+    "pre-commit>=4.3.0",
+    "pytest>=8.4.2",
+    "ruff>=0.13.0",
+]

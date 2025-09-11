@@ -1,0 +1,11 @@
+autodiff
+coeffs
+derivs
+exponentials
+Kalman
+Kuramoto
+Levenberg
+Marquardt
+Singlestep
+Sivashinsky
+stochasticity
