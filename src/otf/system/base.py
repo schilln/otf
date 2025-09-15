@@ -36,15 +36,16 @@ class BaseSystem:
         gs
             Parameter values to be used by the "true" system
         bs
-            Fixed parameter values to be used by the nudged system but not to be
-            updated (i.e., not to be estimated nor optimized)
+            Fixed parameter values to be used by the data assimilated system but
+            not to be updated (i.e., not to be estimated nor optimized)
         cs
-            Estimated parameter values to be used by the nudged system, to be
-            estimated/optimized (may or may not correspond to `gs`)
+            Estimated parameter values to be used by the data assimilate system,
+            to be estimated/optimized (may or may not correspond to `gs`)
         observed_slice
-            The slice denoting the observed part of the true and nudged system
-            states when nudging in `f`. May use `jnp.s_` to define slice to use.
-            To observed the entire system, use `jnp.s_[:]`.
+            The slice denoting the observed part of the true and data
+            assimilated system states when nudging in `f_assimilated`. May use
+            `jnp.s_` to define slice to use. To observed the entire system, use
+            `jnp.s_[:]`.
         assimilated_ode
             Function that computes the time derivative of the data assimilated
             state using the current estimated parameters `cs`.
@@ -70,36 +71,38 @@ class BaseSystem:
         self,
         cs: jndarray,
         true_observed: jndarray,
-        nudged: jndarray,
+        assimilated: jndarray,
     ) -> jndarray:
-        """Computes the time derivative of `nudged` using
-        `System.assimilated_ode` followed by nudging the nudged system using the
-        observed portion of the the true state, `true_observed`.
+        """Computes the time derivative of `assimilated` using `assimilated_ode`
+        followed by nudging the data assimilated system using the observed
+        portion of the the true state, `true_observed`.
 
         This function will be jitted.
 
         Parameters
         ----------
         cs
-            Estimated parameter values to be used by the nudged system
+            Estimated parameter values to be used by the data assimilated system
         true_observed
             Observed portion of true system system
-        nudged
-            Nudged system state
+        assimilated
+            Data assimilated system state
 
         Returns
         -------
-        nudgedp
-            The time derivatives of `true` and `nudged`
+        assimilated_p
+            The time derivative of `assimilated_p`
         """
         s = self.observed_slice
 
-        nudgedp = self._assimilated_ode(cs, nudged)
-        nudgedp = nudgedp.at[s].subtract(self.μ * (nudged[s] - true_observed))
+        assimilated_p = self._assimilated_ode(cs, assimilated)
+        assimilated_p = assimilated_p.at[s].subtract(
+            self.mu * (assimilated[s] - true_observed)
+        )
 
-        return nudgedp
+        return assimilated_p
 
-    def compute_w(self, nudged: jndarray) -> jndarray:
+    def compute_w(self, assimilated: jndarray) -> jndarray:
         """Compute the leading-order approximation of the sensitivity equations.
 
         Subclasses may override this method to optimize computation or to obtain
@@ -107,8 +110,8 @@ class BaseSystem:
 
         Parameters
         ----------
-        nudged
-            The nudged system
+        assimilated
+            Data assimilated system state
 
         Returns
         -------
@@ -116,20 +119,22 @@ class BaseSystem:
             The ith row corresponds to the asymptotic approximation of the ith
             sensitivity corresponding to the ith unknown parameter ci
         """
-        return self._compute_w(self.cs, nudged)
+        return self._compute_w(self.cs, assimilated)
 
     @partial(jax.jit, static_argnames="self")
-    def _compute_w(self, cs: jndarray, nudged: jndarray) -> jndarray:
+    def _compute_w(self, cs: jndarray, assimilated: jndarray) -> jndarray:
         return (
-            jax.jacrev(self.estimated_ode, 0)(cs, nudged)[self.observed_slice].T
-            / self.μ
+            jax.jacrev(self._assimilated_ode, 0)(cs, assimilated)[
+                self.observed_slice
+            ].T
+            / self.mu
         )
 
     def _set_cs(self, cs):
         self._cs = cs
 
     # The following attributes are read-only.
-    μ = property(lambda self: self._μ)
+    mu = property(lambda self: self._mu)
     gs = property(lambda self: self._gs)
     bs = property(lambda self: self._bs)
     cs = property(lambda self: self._cs, _set_cs)
@@ -144,9 +149,9 @@ class SyncSystem(BaseSystem):
 
     Methods
     -------
-    f_true
+    true_f
         Computes the time derivative of the true system, given the current
-        states.
+        state.
     """
 
     def __init__(
@@ -157,7 +162,7 @@ class SyncSystem(BaseSystem):
         cs: jndarray,
         observed_slice: slice,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
-        true_ode: Callable[[jndarray], jndarray],
+        true_ode: Callable[[jndarray, jndarray], jndarray],
     ):
         """
 
@@ -166,12 +171,32 @@ class SyncSystem(BaseSystem):
         See `BaseSystem` for other parameter definitions.
 
         true_ode
-            Function computing the time derivative of the true state.
-            Parameters: (true,)
+            Function that computes the time derivative of the true state
+            Parameters: (gs, true)
         """
         super().__init__(mu, gs, bs, cs, observed_slice, assimilated_ode)
 
-        self.f_true = true_ode
+        self._true_ode = true_ode
+
+    def true_f(
+        self,
+        true: jndarray,
+    ) -> jndarray:
+        """Computes the time derivative of `true` using `true_ode`.
+
+        This function will be jitted.
+
+        Parameters
+        ----------
+        true
+            True system state
+
+        Returns
+        -------
+        true_p
+            The time derivative of `assimilated_p`
+        """
+        return self._true_ode(self.gs, true)
 
 
 class AsyncSystem(BaseSystem):
