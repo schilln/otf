@@ -1,14 +1,12 @@
 """Algorithms to estimate optimal parameters for the nudged system in an
-instance of `base_system.System`.
+instance of `..syncd.system.System`.
 
-Should also work with `separate_base_system.System`.
+Should also work with `..async.system.System`.
 
 Base Classes
 ------------
 Optimizer
     Abstract base class to implement algorithms for optimizing parameters
-LRScheduler
-    Abstract base class to implement learning rate scheduling
 
 Helpers
 --------------
@@ -24,37 +22,21 @@ pruned_factory
     Function that creates a "pruned" type of `System`, permanently setting to
     zero parameters that fall below a threshold for a specified number of
     iterations
-
-Classes Implementing Optimization Algorithms
---------------------------------------------
-GradientDescent
-WeightedLevenbergMarquardt
-LevenbergMarquardt
-OptaxWrapper
-    Wraps a given optax optimizer as an `Optimizer`
-
-Classes Implementing Learning Rate Scheduling
----------------------------------------------
-DummyLRScheduler
-ExponentialLR
-MultiStepLR
 """
 
 from collections.abc import Callable
-from collections import Counter
 
 import jax
-from jax import numpy as jnp
 import numpy as np
-import optax
+from jax import numpy as jnp
 
-from base_system import System
+from ..system.base import BaseSystem
 
 jndarray = jnp.ndarray
 
 
-class Optimizer:
-    def __init__(self, system: System):
+class BaseOptimizer:
+    def __init__(self, system: BaseSystem):
         """Abstract base class for optimizers of `System`s to compute updated
         parameter values.
 
@@ -135,10 +117,10 @@ class Optimizer:
     system = property(lambda self: self._system)
 
 
-class PartialOptimizer(Optimizer):
+class PartialOptimizer(BaseOptimizer):
     def __init__(
         self,
-        optimizer: Optimizer,
+        optimizer: BaseOptimizer,
         param_idx: jndarray | None = None,
     ):
         """Optimize only specified parameters.
@@ -189,92 +171,10 @@ class PartialOptimizer(Optimizer):
             setattr(self.optimizer, name, value)
 
 
-class GradientDescent(Optimizer):
-    def __init__(self, system: System, learning_rate: float = 1e-4):
-        """Perform gradient descent.
-
-        See documentation of `Optimizer`.
-
-        Parameters
-        ----------
-        learning_rate
-            The learning rate to use in gradient descent
-        """
-        super().__init__(system)
-        self.learning_rate = learning_rate
-
-    def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
-        gradient = self.compute_gradient(observed_true, nudged)
-
-        return -self.learning_rate * gradient
-
-
-class WeightedLevenbergMarquardt(Optimizer):
-    def __init__(
-        self, system: System, learning_rate: float = 1e-3, lam: float = 1e-2
-    ):
-        """Perform a weighted version of the Levenberg–Marquardt modification of
-        Gauss–Newton.
-
-        Parameters
-        ----------
-        learning_rate
-            The learning rate (scalar by which to multiply the step)
-        lam
-            Levenberg–Marquardt parameter
-        """
-        super().__init__(system)
-        self.learning_rate = learning_rate
-        self.lam = lam
-
-    def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
-        gradient = self.compute_gradient(observed_true, nudged)
-
-        mat = jnp.outer(gradient, gradient)
-
-        step = jnp.linalg.solve(
-            mat + self.lam * jnp.eye(mat.shape[0]), gradient
-        )
-
-        return -self.learning_rate * step
-
-
-class LevenbergMarquardt(Optimizer):
-    def __init__(
-        self, system: System, learning_rate: float = 1e-3, lam: float = 1e-2
-    ):
-        """Perform the Levenberg–Marquardt modification of Gauss–Newton.
-
-        Parameters
-        ----------
-        learning_rate
-            The learning rate (scalar by which to multiply the step)
-        lam
-            Levenberg–Marquardt parameter
-        """
-        super().__init__(system)
-        self.learning_rate = learning_rate
-        self.lam = lam
-
-    def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
-        gradient = self.compute_gradient(observed_true, nudged)
-
-        w = self.system.compute_w(nudged)
-        m = w.shape[0]
-        w_flat = w.reshape(m, -1)
-        mat = jnp.real(w_flat.conj() @ w_flat.T)
-
-        step = jnp.linalg.solve(
-            mat + self.lam * jnp.eye(mat.shape[0]), gradient
-        )
-
-        return -self.learning_rate * step
-
-
-class Regularizer(Optimizer):
+class Regularizer(BaseOptimizer):
     def __init__(
         self,
-        system: System,
+        system: BaseSystem,
         ord: int | float | Callable,
         prior: jndarray | None = None,
         callable_is_derivative: bool | None = None,
@@ -362,35 +262,12 @@ class Regularizer(Optimizer):
     prior = property(lambda self: self._prior)
 
 
-class OptaxWrapper(Optimizer):
-    def __init__(
-        self, system: System, optimizer: optax.GradientTransformationExtraArgs
-    ):
-        """Wrap a given Optax optimizer.
-
-        Parameters
-        ----------
-        optimizer
-            Instance of `optax.GradientTransformationExtraArgs`
-            For example, `optax.adam(learning_rate=1e-1)`.
-        """
-        super().__init__(system)
-        self.optimizer = optimizer
-        self.opt_state = self.optimizer.init(system.cs)
-
-    def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
-        gradient = self.compute_gradient(observed_true, nudged)
-
-        update, self.opt_state = self.optimizer.update(gradient, self.opt_state)
-        return update
-
-
-class OptimizerChain(Optimizer):
+class OptimizerChain(BaseOptimizer):
     def __init__(
         self,
-        system: System,
+        system: BaseSystem,
         learning_rate: float,
-        optimizers: list[Optimizer],
+        optimizers: list[BaseOptimizer],
         weights: list[float],
     ):
         """Use several `Optimizer`s together, such as gradient descent with
@@ -432,7 +309,7 @@ class OptimizerChain(Optimizer):
     weights = property(lambda self: self._weights)
 
 
-def pruned_factory(system_type: type[System]) -> type[System]:
+def pruned_factory(system_type: type[BaseSystem]) -> type[BaseSystem]:
     """Return a 'pruned' variant of `system_type`.
 
     If a parameter in `cs` of the system is to be set below its corresponding
@@ -548,83 +425,3 @@ def pruned_factory(system_type: type[System]) -> type[System]:
     Pruned.__annotations__ = system_type.__annotations__
 
     return Pruned
-
-
-class LRScheduler:
-    def __init__(self, optimizer: Optimizer):
-        """Given an `optimizer` with a `learning_rate` attribute, adjust its
-        learning rate according to some algorithm.
-        """
-        self.optimizer = optimizer
-
-    def step(self):
-        raise NotImplementedError
-
-
-class DummyLRScheduler(LRScheduler):
-    def __init__(self, *args, **kwargs):
-        """A dummy learning rate scheduler for testing with code that assumes
-        use of a scheduler.
-        """
-        pass
-
-    def step(self):
-        pass
-
-
-class ExponentialLR(LRScheduler):
-    def __init__(self, optimizer: Optimizer, gamma: float = 0.99):
-        """Multiply the optimizer's learning rate by a factor each time the
-        method `step` is called.
-
-        Parameters
-        ----------
-        optimizer
-            An instance of `Optimizer` with a `learning_rate` attribute.
-        gamma
-            Multiply the learning rate of `optimizer` by `gamma` with every call
-            to `step`.
-        """
-        super().__init__(optimizer)
-        self.gamma = gamma
-
-    def step(self):
-        self.optimizer.learning_rate *= self.gamma
-
-
-class MultiStepLR(LRScheduler):
-    def __init__(
-        self,
-        optimizer: Optimizer,
-        milestones: list[int] | tuple[int],
-        gamma: float = 0.5,
-    ):
-        """At each given milestone (number of iterations), multiply the learning
-        rate by a corresponding factor.
-
-        Inspired by PyTorch's `MultiStepLR`
-
-        Parameters
-        ----------
-        optimizer
-            An instance of `Optimizer` with a `learning_rate` attribute.
-        milestones
-            For each milestone, update the learning rate after that many calls
-            to `step`.
-            Specifying the same milestone m times will result in
-            multiplying the learning rate by `gamma` m times at that milestone.
-        gamma
-            Multiply the learning rate of `optimizer` by `gamma` upon reaching
-            each milestone in `milestones`.
-        """
-        super().__init__(optimizer)
-        self.milestones = Counter(milestones)
-        self.gamma = gamma
-        self.steps = 0
-
-    def step(self):
-        self.steps += 1
-        if self.steps in self.milestones:
-            self.optimizer.learning_rate *= (
-                self.gamma ** self.milestones[self.steps]
-            )

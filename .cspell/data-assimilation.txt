@@ -1,11 +1,17 @@
+assimilateds
 autodiff
+Bashforth
 coeffs
 derivs
 exponentials
+jitted
 Kalman
 Kuramoto
+Kutta
 Levenberg
 Marquardt
+multistep
+Runge
 Singlestep
 Sivashinsky
 stochasticity

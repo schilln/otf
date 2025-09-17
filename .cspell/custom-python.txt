@@ -1,6 +1,8 @@
+arange
 argnames
 cmap
 figsize
+fori
 jndarray
 ndarray
 zlim

@@ -4,7 +4,7 @@ Functions
 ---------
 run_update
     Iteratively simulates a `System` and updates parameter values, returning the
-    sequences of parameter values and nudged-vs-true errors.
+    sequences of parameter values and data assimilated-vs-true errors.
 """
 
 from collections.abc import Callable
@@ -12,32 +12,34 @@ from collections.abc import Callable
 import numpy as np
 from jax import numpy as jnp
 
-import base_system
-import base_solver
-import base_optim
+from ..optim import base as optim_base
+from ..optim import lr_scheduler
+from ..optim import optimizer as opt
+from ..system import BaseSystem
+from ..time_integration import base as ti_base
 
 jndarray = jnp.ndarray
 
 
 def run_update(
-    system: base_system.System,
-    solver: base_solver.Solver,
+    system: BaseSystem,
+    solver: ti_base.BaseSolver,
     dt: float,
     T0: float,
     Tf: float,
     t_relax: float,
     true0: jndarray,
-    nudged0: jndarray,
+    assimilated0: jndarray,
     optimizer: Callable[[jndarray, jndarray], jndarray]
-    | base_optim.Optimizer
+    | optim_base.BaseOptimizer
     | None = None,
-    lr_scheduler: base_optim.LRScheduler = base_optim.DummyLRScheduler(),
+    lr_scheduler: lr_scheduler.LRScheduler = lr_scheduler.DummyLRScheduler(),
     t_begin_updates: float | None = None,
     return_all: bool = False,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Use `solver` to run `system` and update parameter values with
     `optimizer`, and return sequence of parameter values and errors between
-    nudged and true states.
+    data assimilated and true states.
 
     Parameters
     ----------
@@ -58,11 +60,12 @@ def run_update(
         without simulating longer than `t_relax` between parameter updates.
     true0
         The initial state of the true system
-    nudged0
-        The initial state of the nudged system
+    assimilated0
+        The initial state of the data assimilated system
     optimizer
         A callable that accepts the observed portion of the true system state
-        and the nudged system state and returns updated `system` parameters.
+        and the data assimilated system state and returns updated `system`
+        parameters.
 
         Note that an instance of `base_optim.Optimizer` implements this
         interface.
@@ -72,7 +75,7 @@ def run_update(
     t_begin_updates: float | None = None,
         Perform parameter updates after this time.
     return_all
-        If true, return true and nudged states for entire simulation.
+        If true, return true and data assimilated states for entire simulation.
 
     Returns
     -------
@@ -82,7 +85,7 @@ def run_update(
             N is the number of parameter updates performed (the first row is the
             initial set of parameter values).
     errors
-        The sequence of errors between the true and nudged systems
+        The sequence of errors between the true and data assimilated systems
         shape (N,) where N is the number of parameter updates performed
     tls
         The actual linspace of time values used, in multiples of `t_relax` from
@@ -91,15 +94,15 @@ def run_update(
     true
         True states for final iteration of length `t_relax`,
         or if `return_all` is True, then true states for entire simulation.
-    nudged
-        Nudged states for final iteration of length `t_relax`,
-        or if `return_all` is True, then nudged states for entire simulation.
+    assimilated
+        Data assimilated states for final iteration of length `t_relax`,
+        or if `return_all` is True, then assimilated states for entire simulation.
     """
     if optimizer is None:
-        optimizer = base_optim.LevenbergMarquardt(system)
+        optimizer = opt.LevenbergMarquardt(system)
 
-    if isinstance(solver, base_solver.SinglestepSolver):
-        return _run_update_singlestep(
+    if isinstance(solver, ti_base.MultistageSolver):
+        return _run_update_multistage(
             system,
             solver,
             dt,
@@ -107,13 +110,13 @@ def run_update(
             Tf,
             t_relax,
             true0,
-            nudged0,
+            assimilated0,
             optimizer,
             lr_scheduler,
             t_begin_updates,
             return_all,
         )
-    elif isinstance(solver, base_solver.MultistepSolver):
+    elif isinstance(solver, ti_base.MultistepSolver):
         return _run_update_multistep(
             system,
             solver,
@@ -122,7 +125,7 @@ def run_update(
             Tf,
             t_relax,
             true0,
-            nudged0,
+            assimilated0,
             optimizer,
             lr_scheduler,
             t_begin_updates,
@@ -131,53 +134,55 @@ def run_update(
     else:
         raise NotImplementedError(
             "`solver` should be instance of subclass of "
-            "`base_solver.SinglestepSolver` or `base_solver.MultistepSolver`"
+            "`MultistageSolver` or `MultistepSolver`"
         )
 
 
-def _run_update_singlestep(
-    system: base_system.System,
-    solver: base_solver.SinglestepSolver,
+def _run_update_multistage(
+    system: BaseSystem,
+    solver: ti_base.MultistageSolver,
     dt: float,
     T0: float,
     Tf: float,
     t_relax: float,
     true0: jndarray,
-    nudged0: jndarray,
+    assimilated0: jndarray,
     optimizer: Callable[[jndarray, jndarray], jndarray]
-    | base_optim.Optimizer
+    | optim_base.BaseOptimizer
     | None = None,
-    lr_scheduler: base_optim.LRScheduler = base_optim.DummyLRScheduler,
+    lr_scheduler: lr_scheduler.LRScheduler = lr_scheduler.DummyLRScheduler,
     t_begin_updates: float | None = None,
     return_all: bool = False,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Implementation of `run_update` for non-multistep solvers (e.g., RK4),
     here referred to as 'singlestep' solvers. See documentation of `run_update`.
     """
-    assert isinstance(solver, base_solver.SinglestepSolver)
+    assert isinstance(solver, ti_base.MultistageSolver)
 
     if optimizer is None:
-        optimizer = base_optim.LevenbergMarquardt(system)
+        optimizer = opt.LevenbergMarquardt(system)
 
     cs = [system.cs]
     errors = []
 
     if return_all:
-        trues, nudgeds = (
+        trues, assimilateds = (
             [np.expand_dims(true0, 0)],
-            [np.expand_dims(nudged0, 0)],
+            [np.expand_dims(assimilated0, 0)],
         )
 
     t0 = T0
     tf = t0 + t_relax
     while tf <= Tf:
-        true, nudged, tls = solver.solve(true0, nudged0, t0, tf, dt)
+        true, assimilated, tls = solver.solve(true0, assimilated0, t0, tf, dt)
 
-        true0, nudged0 = true[-1], nudged[-1]
+        true0, assimilated0 = true[-1], assimilated[-1]
 
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
-            system.cs = optimizer(true[-1][system.observed_slice], nudged[-1])
+            system.cs = optimizer(
+                true[-1][system.observed_slice], assimilated[-1]
+            )
         cs.append(system.cs)
         lr_scheduler.step()
 
@@ -186,12 +191,13 @@ def _run_update_singlestep(
 
         # Relative error
         errors.append(
-            np.linalg.norm(true[1:] - nudged[1:]) / np.linalg.norm(true[1:])
+            np.linalg.norm(true[1:] - assimilated[1:])
+            / np.linalg.norm(true[1:])
         )
 
         if return_all:
             trues.append(true[1:])
-            nudgeds.append(nudged[1:])
+            assimilateds.append(assimilated[1:])
 
     errors = np.array(errors)
 
@@ -203,36 +209,36 @@ def _run_update_singlestep(
         errors,
         tls,
         np.concatenate(trues) if return_all else true,
-        np.concatenate(nudgeds) if return_all else nudged,
+        np.concatenate(assimilateds) if return_all else assimilated,
     )
 
 
 def _run_update_multistep(
-    system: base_system.System,
-    solver: base_solver.MultistepSolver,
+    system: BaseSystem,
+    solver: ti_base.MultistepSolver,
     dt: float,
     T0: float,
     Tf: float,
     t_relax: float,
     true0: jndarray,
-    nudged0: jndarray,
+    assimilated0: jndarray,
     optimizer: Callable[[jndarray, jndarray], jndarray]
-    | base_optim.Optimizer
+    | optim_base.BaseOptimizer
     | None = None,
-    lr_scheduler: base_optim.LRScheduler = base_optim.DummyLRScheduler,
+    lr_scheduler: lr_scheduler.LRScheduler = lr_scheduler.DummyLRScheduler,
     t_begin_updates: float | None = None,
     return_all: bool = False,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Implementation of `run_update` for multistep solvers (e.g.,
     Adams–Bashforth). See documentation of `run_update`.
     """
-    assert isinstance(solver, base_solver.MultistepSolver)
+    assert isinstance(solver, ti_base.MultistepSolver)
 
     if return_all:
         raise NotImplementedError("`return_all` not implemented yet")
 
     if optimizer is None:
-        optimizer = base_optim.LevenbergMarquardt(system)
+        optimizer = opt.LevenbergMarquardt(system)
 
     cs = [system.cs]
     errors = []
@@ -241,13 +247,13 @@ def _run_update_multistep(
     t0 = T0
     tf = t0 + t_relax
 
-    true, nudged, tls = solver.solve(true0, nudged0, t0, tf, dt)
+    true, assimilated, tls = solver.solve(true0, assimilated0, t0, tf, dt)
 
-    true0, nudged0 = true[-solver.k :], nudged[-solver.k :]
+    true0, assimilated0 = true[-solver.k :], assimilated[-solver.k :]
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = optimizer(true[-1][system.observed_slice], nudged[-1])
+        system.cs = optimizer(true[-1][system.observed_slice], assimilated[-1])
     cs.append(system.cs)
     lr_scheduler.step()
 
@@ -256,24 +262,26 @@ def _run_update_multistep(
 
     # Relative error
     errors.append(
-        np.linalg.norm(true[1:] - nudged[1:]) / np.linalg.norm(true[1:])
+        np.linalg.norm(true[1:] - assimilated[1:]) / np.linalg.norm(true[1:])
     )
 
     while tf <= Tf:
-        true, nudged, tls = solver.solve(
+        true, assimilated, tls = solver.solve(
             true0,
-            nudged0,
+            assimilated0,
             t0,
             tf,
             dt,
             start_with_multistep=True,
         )
 
-        true0, nudged0 = true[-solver.k :], nudged[-solver.k :]
+        true0, assimilated0 = true[-solver.k :], assimilated[-solver.k :]
 
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
-            system.cs = optimizer(true[-1][system.observed_slice], nudged[-1])
+            system.cs = optimizer(
+                true[-1][system.observed_slice], assimilated[-1]
+            )
         cs.append(system.cs)
         lr_scheduler.step()
 
@@ -282,7 +290,7 @@ def _run_update_multistep(
 
         # Relative error
         errors.append(
-            np.linalg.norm(true[solver.k :] - nudged[solver.k :])
+            np.linalg.norm(true[solver.k :] - assimilated[solver.k :])
             / np.linalg.norm(true[solver.k :])
         )
 
@@ -291,4 +299,4 @@ def _run_update_multistep(
     # Note the last `t0` is the actual final time of the simulation.
     tls = np.linspace(T0, t0, len(errors) + 1)
 
-    return jnp.stack(cs), errors, tls, true, nudged
+    return jnp.stack(cs), errors, tls, true, assimilated
