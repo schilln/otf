@@ -14,11 +14,11 @@ MultiStepLR
 
 from collections import Counter
 
-from .base import Optimizer
+from .base import BaseOptimizer
 
 
 class LRScheduler:
-    def __init__(self, optimizer: Optimizer):
+    def __init__(self, optimizer: BaseOptimizer):
         """Given an `optimizer` with a `learning_rate` attribute, adjust its
         learning rate according to some algorithm.
         """
@@ -40,7 +40,7 @@ class DummyLRScheduler(LRScheduler):
 
 
 class ExponentialLR(LRScheduler):
-    def __init__(self, optimizer: Optimizer, gamma: float = 0.99):
+    def __init__(self, optimizer: BaseOptimizer, gamma: float = 0.99):
         """Multiply the optimizer's learning rate by a factor each time the
         method `step` is called.
 
@@ -62,7 +62,7 @@ class ExponentialLR(LRScheduler):
 class MultiStepLR(LRScheduler):
     def __init__(
         self,
-        optimizer: Optimizer,
+        optimizer: BaseOptimizer,
         milestones: list[int] | tuple[int],
         gamma: float = 0.5,
     ):

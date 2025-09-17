@@ -35,7 +35,7 @@ from ..system.base import BaseSystem as System
 jndarray = jnp.ndarray
 
 
-class Optimizer:
+class BaseOptimizer:
     def __init__(self, system: System):
         """Abstract base class for optimizers of `System`s to compute updated
         parameter values.
@@ -117,10 +117,10 @@ class Optimizer:
     system = property(lambda self: self._system)
 
 
-class PartialOptimizer(Optimizer):
+class PartialOptimizer(BaseOptimizer):
     def __init__(
         self,
-        optimizer: Optimizer,
+        optimizer: BaseOptimizer,
         param_idx: jndarray | None = None,
     ):
         """Optimize only specified parameters.
@@ -171,7 +171,7 @@ class PartialOptimizer(Optimizer):
             setattr(self.optimizer, name, value)
 
 
-class Regularizer(Optimizer):
+class Regularizer(BaseOptimizer):
     def __init__(
         self,
         system: System,
@@ -262,12 +262,12 @@ class Regularizer(Optimizer):
     prior = property(lambda self: self._prior)
 
 
-class OptimizerChain(Optimizer):
+class OptimizerChain(BaseOptimizer):
     def __init__(
         self,
         system: System,
         learning_rate: float,
-        optimizers: list[Optimizer],
+        optimizers: list[BaseOptimizer],
         weights: list[float],
     ):
         """Use several `Optimizer`s together, such as gradient descent with
