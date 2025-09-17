@@ -8,17 +8,21 @@ from collections.abc import Callable
 import numpy as np
 from jax import numpy as jnp
 
-import separate_base_system
-from separate_base_solver import Solver, SinglestepSolver, MultistepSolver
-import base_optim
+from ..optim import base as optim_base
+from ..system import BaseSystem
+from ..time_integration.base import (
+    BaseSolver,
+    MultistageSolver,
+    MultistepSolver,
+)
 
 jndarray = jnp.ndarray
 
 
 def run_update(
-    system: separate_base_system.System,
-    true_solver: Solver,
-    nudged_solver: Solver,
+    system: BaseSystem,
+    true_solver: BaseSolver,
+    nudged_solver: BaseSolver,
     dt: float,
     T0: float,
     Tf: float,
@@ -26,7 +30,7 @@ def run_update(
     true0: jndarray,
     nudged0: jndarray,
     optimizer: Callable[[jndarray, jndarray], jndarray]
-    | base_optim.Optimizer
+    | optim_base.Optimizer
     | None = None,
 ) -> tuple[jndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `nudged_solver` to run `system` and update
@@ -82,7 +86,7 @@ def run_update(
         shape (N + 1,) where N is the number of parameter updates performed
     """
     if optimizer is None:
-        optimizer = base_optim.LevenbergMarquardt(system)
+        optimizer = optim_base.LevenbergMarquardt(system)
 
     cs = [system.cs]
     errors = []
@@ -98,13 +102,13 @@ def run_update(
 
         # Get true states except for initial states (for error calculation).
         remove_true0 = lambda true: true[true_solver.k :]
-    elif isinstance(true_solver, SinglestepSolver):
+    elif isinstance(true_solver, MultistageSolver):
         get_true0 = lambda true: true[-1]
         remove_true0 = lambda true: true[1:]
     else:
         raise NotImplementedError(
             "`true_solver` should be instance of subclass of "
-            "`separate_base_solver.SinglestepSolver` or "
+            "`separate_base_solver.MultistageSolver` or "
             "`separate_base_solver.MultistepSolver`"
         )
 
@@ -118,7 +122,7 @@ def run_update(
 
         # Stack previous true states with current true states.
         concat_true = lambda prev_true, true: jnp.concatenate((prev_true, true))
-    elif isinstance(nudged_solver, SinglestepSolver):
+    elif isinstance(nudged_solver, MultistageSolver):
         get_nudged0 = lambda nudged: nudged[-1]
         remove_nudged0 = lambda nudged: nudged[1:]
         get_prev_true = lambda _: None
@@ -126,7 +130,7 @@ def run_update(
     else:
         raise NotImplementedError(
             "`nudged_solver` should be instance of subclass of "
-            "`separate_base_solver.SinglestepSolver` or "
+            "`separate_base_solver.MultistageSolver` or "
             "`separate_base_solver.MultistepSolver`"
         )
 

@@ -2,8 +2,8 @@
 
 from jax import numpy as jnp
 
-from separate_base_system import System
-from separate_base_solver import Solver, SinglestepSolver, MultistepSolver
+from ...system import BaseSystem as BaseSystem
+from ..time_integration.base import MultistepSolver, SinglestepSolver, Solver
 
 jndarray = jnp.ndarray
 
@@ -41,7 +41,7 @@ class RK4(SinglestepSolver):
 
 
 class ForwardEuler(SinglestepSolver):
-    def __init__(self, system: System):
+    def __init__(self, system: BaseSystem):
         """Forward Euler solver.
 
         See documentation of `base_solver.SinglestepSolver`.
@@ -78,7 +78,7 @@ class ForwardEuler(SinglestepSolver):
 
 
 class TwoStepAdamsBashforth(MultistepSolver):
-    def __init__(self, system: System, pre_multistep_solver: Solver):
+    def __init__(self, system: BaseSystem, pre_multistep_solver: Solver):
         """Two-step Adams–Bashforth solver.
 
         See documentation of `base_solver.MultistepSolver`.
@@ -125,7 +125,7 @@ class TwoStepAdamsBashforth(MultistepSolver):
 
 
 class FourStepAdamsBashforth(MultistepSolver):
-    def __init__(self, system: System, pre_multistep_solver: Solver):
+    def __init__(self, system: BaseSystem, pre_multistep_solver: Solver):
         """Four-step Adams–Bashforth solver.
 
         See documentation of `base_solver.MultistepSolver`.

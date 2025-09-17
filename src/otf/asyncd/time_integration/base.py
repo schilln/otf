@@ -4,13 +4,13 @@ from collections.abc import Callable
 
 from jax import numpy as jnp, lax
 
-from separate_base_system import System
+from ...system import BaseSystem
 
 jndarray = jnp.ndarray
 
 
 class Solver:
-    def __init__(self, system: System):
+    def __init__(self, system: BaseSystem):
         """Base class for solving true and nudged systems separately.
 
         Parameters
@@ -248,7 +248,9 @@ class SinglestepSolver(Solver):
 
 
 class MultistepSolver(Solver):
-    def __init__(self, system: System, pre_multistep_solver: Solver, k: int):
+    def __init__(
+        self, system: BaseSystem, pre_multistep_solver: Solver, k: int
+    ):
         """Abstract base class for multistep solvers (e.g., two-step
         Adams–Bashforth).
 
