@@ -53,7 +53,7 @@ class BaseSystem:
 
         Methods
         -------
-        assimilated_f
+        f_assimilated
             Computes the time derivative of the data assimilated state.
         compute_w
             Computes the leading-order approximation of the sensitivity
@@ -67,7 +67,7 @@ class BaseSystem:
         self._cs = cs
         self._assimilated_ode = assimilated_ode
 
-    def assimilated_f(
+    def f_assimilated(
         self,
         cs: jndarray,
         true_observed: jndarray,
@@ -141,7 +141,7 @@ class BaseSystem:
     observed_slice = property(lambda self: self._observed_slice)
 
 
-class SyncSystem(BaseSystem):
+class System_ModelKnown(BaseSystem):
     """Class for when the true differential equation is known and may be
     simulated concurrently with the data assimilated system.
 
@@ -149,7 +149,7 @@ class SyncSystem(BaseSystem):
 
     Methods
     -------
-    true_f
+    f_true
         Computes the time derivative of the true system, given the current
         state.
     """
@@ -178,7 +178,7 @@ class SyncSystem(BaseSystem):
 
         self._true_ode = true_ode
 
-    def true_f(
+    def f_true(
         self,
         true: jndarray,
     ) -> jndarray:
@@ -199,7 +199,7 @@ class SyncSystem(BaseSystem):
         return self._true_ode(self.gs, true)
 
 
-class AsyncSystem(BaseSystem):
+class System_ModelUnknown(BaseSystem):
     """Class for when the true differential equation is not known and and so may
     not be simulated concurrently with the data assimilated system.
 
