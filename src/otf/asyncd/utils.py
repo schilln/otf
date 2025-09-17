@@ -126,14 +126,14 @@ def run_update_async(
         # Stack previous true states with current true states.
         concat_true = lambda prev_true, true: jnp.concatenate((prev_true, true))
     elif isinstance(assimilated_solver, MultistageSolver):
-        get_assimilated0 = lambda assimilated: assimilated[-1]
-        remove_assimilated0 = lambda assimilated: assimilated[1:]
-        get_prev_true = lambda _: None
-        concat_true = lambda _, true: true
+        raise NotImplementedError(
+            "`MultistageSolver` not yet supported for `assimilated_solver`;"
+            " should be instance of subclass of `MultistepSolver`"
+        )
     else:
         raise NotImplementedError(
-            "`assimilated_solver` should be instance of subclass of"
-            " `Multistagesolver` or `MultistepSolver`"
+            "``assimilated_solver` should be instance of subclass of"
+            " `MultistepSolver`"
         )
 
     t0 = T0
