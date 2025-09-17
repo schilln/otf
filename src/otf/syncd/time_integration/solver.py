@@ -14,8 +14,8 @@ from functools import partial
 from jax import numpy as jnp, jit
 import scipy
 
-from base_system import System
-from base_solver import Solver, SinglestepSolver, MultistepSolver
+from ...system.base import BaseSystem
+from .base import Solver, SinglestepSolver, MultistepSolver
 
 jndarray = jnp.ndarray
 
@@ -30,42 +30,52 @@ class RK4(SinglestepSolver):
 
     def _step_factory(self):
         def step(i, vals):
-            f = self.system.f
+            f_t = self.system.f_true
+            f_a = self.system.f_assimilated
 
-            (true, nudged), (dt, cs) = vals
+            (true, assimilated), (dt, cs) = vals
             t = true[i - 1]
-            n = nudged[i - 1]
+            a = assimilated[i - 1]
 
-            k1t, k1n = f(cs, t, n)
-            k2t, k2n = f(
-                cs,
-                t + dt * k1t / 2,
-                n + dt * k1n / 2,
+            k1t, k1n = f_t(t), f_a(cs, t, a)
+            k2t, k2n = (
+                f_t(tmp := t + dt * k1t / 2),
+                f_a(
+                    cs,
+                    tmp,
+                    a + dt * k1n / 2,
+                ),
             )
-            k3t, k3n = f(
-                cs,
-                t + dt * k2t / 2,
-                n + dt * k2n / 2,
+            k3t, k3n = (
+                f_t(tmp := t + dt * k2t / 2),
+                f_a(
+                    cs,
+                    tmp,
+                    a + dt * k2n / 2,
+                ),
             )
-            k4t, k4n = f(
-                cs,
-                t + dt * k3t,
-                n + dt * k3n,
+            k4t, k4n = (
+                f_t(tmp := t + dt * k3t),
+                f_a(
+                    cs,
+                    tmp,
+                    a + dt * k3n,
+                ),
             )
 
             t = t.at[:].add((dt / 6) * (k1t + 2 * k2t + 2 * k3t + k4t))
-            n = n.at[:].add((dt / 6) * (k1n + 2 * k2n + 2 * k3n + k4n))
+            a = a.at[:].add((dt / 6) * (k1n + 2 * k2n + 2 * k3n + k4n))
 
             true = true.at[i].set(t)
-            nudged = nudged.at[i].set(n)
+            assimilated = assimilated.at[i].set(a)
 
-            return (true, nudged), (dt, cs)
+            return (true, assimilated), (dt, cs)
 
         return step
 
 
 class TwoStepAdamsBashforth(MultistepSolver):
-    def __init__(self, system: System, pre_multistep_solver: Solver):
+    def __init__(self, system: BaseSystem, pre_multistep_solver: Solver):
         """Two-step Adams–Bashforth solver.
 
         See documentation of `base_solver.MultistepSolver`.
@@ -97,7 +107,7 @@ class TwoStepAdamsBashforth(MultistepSolver):
 
 
 class SolveIvp(SinglestepSolver):
-    def __init__(self, system: System, options: dict = dict()):
+    def __init__(self, system: BaseSystem, options: dict = dict()):
         """Wrapper around `scipy.integrate.solve_ivp` implementing the same
         external interface as `base_solver.SinglestepSolver`.
 
