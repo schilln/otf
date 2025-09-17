@@ -12,14 +12,14 @@ OptaxWrapper
 import optax
 from jax import numpy as jnp
 
-from ..system.base import BaseSystem as System
+from ..system.base import BaseSystem
 from .base import BaseOptimizer
 
 jndarray = jnp.ndarray
 
 
 class GradientDescent(BaseOptimizer):
-    def __init__(self, system: System, learning_rate: float = 1e-4):
+    def __init__(self, system: BaseSystem, learning_rate: float = 1e-4):
         """Perform gradient descent.
 
         See documentation of `Optimizer`.
@@ -40,7 +40,7 @@ class GradientDescent(BaseOptimizer):
 
 class WeightedLevenbergMarquardt(BaseOptimizer):
     def __init__(
-        self, system: System, learning_rate: float = 1e-3, lam: float = 1e-2
+        self, system: BaseSystem, learning_rate: float = 1e-3, lam: float = 1e-2
     ):
         """Perform a weighted version of the Levenberg–Marquardt modification of
         Gauss–Newton.
@@ -70,7 +70,7 @@ class WeightedLevenbergMarquardt(BaseOptimizer):
 
 class LevenbergMarquardt(BaseOptimizer):
     def __init__(
-        self, system: System, learning_rate: float = 1e-3, lam: float = 1e-2
+        self, system: BaseSystem, learning_rate: float = 1e-3, lam: float = 1e-2
     ):
         """Perform the Levenberg–Marquardt modification of Gauss–Newton.
 
@@ -102,7 +102,9 @@ class LevenbergMarquardt(BaseOptimizer):
 
 class OptaxWrapper(BaseOptimizer):
     def __init__(
-        self, system: System, optimizer: optax.GradientTransformationExtraArgs
+        self,
+        system: BaseSystem,
+        optimizer: optax.GradientTransformationExtraArgs,
     ):
         """Wrap a given Optax optimizer.
 

@@ -30,13 +30,13 @@ import jax
 import numpy as np
 from jax import numpy as jnp
 
-from ..system.base import BaseSystem as System
+from ..system.base import BaseSystem
 
 jndarray = jnp.ndarray
 
 
 class BaseOptimizer:
-    def __init__(self, system: System):
+    def __init__(self, system: BaseSystem):
         """Abstract base class for optimizers of `System`s to compute updated
         parameter values.
 
@@ -174,7 +174,7 @@ class PartialOptimizer(BaseOptimizer):
 class Regularizer(BaseOptimizer):
     def __init__(
         self,
-        system: System,
+        system: BaseSystem,
         ord: int | float | Callable,
         prior: jndarray | None = None,
         callable_is_derivative: bool | None = None,
@@ -265,7 +265,7 @@ class Regularizer(BaseOptimizer):
 class OptimizerChain(BaseOptimizer):
     def __init__(
         self,
-        system: System,
+        system: BaseSystem,
         learning_rate: float,
         optimizers: list[BaseOptimizer],
         weights: list[float],
@@ -309,7 +309,7 @@ class OptimizerChain(BaseOptimizer):
     weights = property(lambda self: self._weights)
 
 
-def pruned_factory(system_type: type[System]) -> type[System]:
+def pruned_factory(system_type: type[BaseSystem]) -> type[BaseSystem]:
     """Return a 'pruned' variant of `system_type`.
 
     If a parameter in `cs` of the system is to be set below its corresponding
