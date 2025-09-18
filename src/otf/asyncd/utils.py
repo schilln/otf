@@ -12,27 +12,27 @@ from ..optim import base as optim_base
 from ..optim import optimizer as opt
 from ..system import BaseSystem
 from ..time_integration.base import (
-    BaseSolver,
     MultistageSolver,
     MultistepSolver,
+    SinglestepSolver,
 )
 
 jndarray = jnp.ndarray
 
 
-def run_update_async(
+def run_update(
     system: BaseSystem,
-    true_solver: BaseSolver,
-    assimilated_solver: MultistepSolver,
+    true_observed: jndarray,
+    assimilated_solver: SinglestepSolver | MultistepSolver,
     dt: float,
     T0: float,
     Tf: float,
     t_relax: float,
-    true0: jndarray,
     assimilated0: jndarray,
     optimizer: Callable[[jndarray, jndarray], jndarray]
     | optim_base.BaseOptimizer
     | None = None,
+    tls_=None,
 ) -> tuple[jndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
@@ -42,8 +42,9 @@ def run_update_async(
     ----------
     system
         The system to simulate
-    true_solver
-        An instance of `Solver` to simulate true state of `system`
+    true_observed
+        Observed states of true system
+        shape (N, ...)
     assimilated_solver
         An instance of `Solver` to simulate data assimilated state of `system`
     dt
@@ -57,8 +58,6 @@ def run_update_async(
         The (approximate) length of time to simulate system between parameter
         updates. This function will use as many multiples of `dt` as possible
         without simulating longer than `t_relax` between parameter updates.
-    true0
-        The initial state of the true system
     assimilated0
         The initial state of the data assimilated system
     optimizer
@@ -91,40 +90,20 @@ def run_update_async(
     cs = [system.cs]
     errors = []
 
-    true_args = dict()
     assimilated_args = dict()
 
-    if isinstance(true_solver, MultistepSolver):
-        true_args["start_with_multistep"] = True
-
-        # Get the initial state for the next iteration.
-        get_true0 = lambda true: true[-true_solver.k :]
-
-        # Get true states except for initial states (for error calculation).
-        remove_true0 = lambda true: true[true_solver.k :]
-    elif isinstance(true_solver, MultistageSolver):
-        get_true0 = lambda true: true[-1]
-        remove_true0 = lambda true: true[1:]
-    else:
-        raise NotImplementedError(
-            "`true_solver` should be instance of subclass of"
-            " `MultistageSolver` or `MultistepSolver`"
-        )
-
-    if isinstance(assimilated_solver, MultistepSolver):
+    if isinstance(assimilated_solver, SinglestepSolver):
+        k = 1
+    elif isinstance(assimilated_solver, MultistepSolver):
         assimilated_args["start_with_multistep"] = True
-        get_assimilated0 = lambda assimilated: assimilated[
-            -assimilated_solver.k :
-        ]
-        remove_assimilated0 = lambda assimilated: assimilated[
-            assimilated_solver.k :
-        ]
+        k = assimilated_solver.k
 
-        # Get true states from the previous iteration.
-        get_prev_true = lambda true: true[-assimilated_solver.k :]
-
-        # Stack previous true states with current true states.
-        concat_true = lambda prev_true, true: jnp.concatenate((prev_true, true))
+        if assimilated_solver.uses_multistage:
+            raise NotImplementedError(
+                "`assimilated_solver` depends on a `MultistageSolver` through"
+                " its `pre_multistep_solver`; all pre-multistep solvers should"
+                " be singlestep or multistep"
+            )
     elif isinstance(assimilated_solver, MultistageSolver):
         raise NotImplementedError(
             "`MultistageSolver` not yet supported for `assimilated_solver`;"
@@ -133,23 +112,22 @@ def run_update_async(
     else:
         raise NotImplementedError(
             "``assimilated_solver` should be instance of subclass of"
-            " `MultistepSolver`"
+            " `SinglestepSolver` or `MultistepSolver`"
         )
 
     t0 = T0
     tf = t0 + t_relax
 
-    true, tls = true_solver.solve_true(true0, t0, tf, dt)
-    assimilated, _ = assimilated_solver.solve_assimilated(
-        assimilated0, t0, tf, dt, true[:, system.observed_slice]
+    start = 0
+    assimilated, tls = assimilated_solver.solve_assimilated(
+        assimilated0, t0, tf, dt, true_observed[start:]
     )
+    end = start + len(tls)
 
-    # Note: If k is 1, the extra first dimension is not eliminated.
-    true0 = get_true0(true)
-    assimilated0 = get_assimilated0(assimilated)
+    assimilated0 = assimilated[-k:]
 
     # Update parameters
-    system.cs = optimizer(true[-1][system.observed_slice], assimilated[-1])
+    system.cs = optimizer(true_observed[end], assimilated[-1])
     cs.append(system.cs)
 
     t0 = tls[-1]
@@ -157,26 +135,27 @@ def run_update_async(
 
     # Relative error
     errors.append(
-        np.linalg.norm(true[1:] - assimilated[1:]) / np.linalg.norm(true[1:])
+        np.linalg.norm(true_observed[start + 1 : end] - assimilated[1:])
+        / np.linalg.norm(true_observed[start + 1 : end])
     )
 
-    prev_true = get_prev_true(true)
+    start = end
+
     while tf <= Tf:
-        true, tls = true_solver.solve_true(true0, t0, tf, dt, **true_args)
         assimilated, tls = assimilated_solver.solve_assimilated(
             assimilated0,
             t0,
             tf,
             dt,
-            concat_true(prev_true, true)[:, system.observed_slice],
+            true_observed[start - k + 1 :],
             **assimilated_args,
         )
+        end = start + len(tls) - k
 
-        true0 = get_true0(true)
-        assimilated0 = get_assimilated0(assimilated)
+        assimilated0 = assimilated[-k:]
 
         # Update parameters
-        system.cs = optimizer(true[-1][system.observed_slice], assimilated[-1])
+        system.cs = optimizer(true_observed[end], assimilated[-1])
         cs.append(system.cs)
 
         t0 = tls[-1]
@@ -184,12 +163,9 @@ def run_update_async(
 
         # Relative error
         errors.append(
-            np.linalg.norm(
-                remove_true0(true) - remove_assimilated0(assimilated)
-            )
-            / np.linalg.norm(remove_true0(true))
+            np.linalg.norm(true_observed[start:end] - assimilated[k:])
+            / np.linalg.norm(true_observed[start:end])
         )
-        prev_true = get_prev_true(true)
 
     errors = np.array(errors)
 
