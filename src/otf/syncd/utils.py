@@ -101,8 +101,8 @@ def run_update(
     if optimizer is None:
         optimizer = opt.LevenbergMarquardt(system)
 
-    if isinstance(solver, ti_base.MultistageSolver):
-        return _run_update_multistage(
+    if isinstance(solver, (ti_base.SinglestepSolver, ti_base.MultistageSolver)):
+        return _run_update_not_multistep(
             system,
             solver,
             dt,
@@ -134,11 +134,11 @@ def run_update(
     else:
         raise NotImplementedError(
             "`solver` should be instance of subclass of "
-            "`MultistageSolver` or `MultistepSolver`"
+            "`SinglestepSolver`, `MultistageSolver` or `MultistepSolver`"
         )
 
 
-def _run_update_multistage(
+def _run_update_not_multistep(
     system: BaseSystem,
     solver: ti_base.MultistageSolver,
     dt: float,
@@ -157,7 +157,9 @@ def _run_update_multistage(
     """Implementation of `run_update` for non-multistep solvers (e.g., RK4),
     here referred to as 'singlestep' solvers. See documentation of `run_update`.
     """
-    assert isinstance(solver, ti_base.MultistageSolver)
+    assert isinstance(
+        solver, (ti_base.SinglestepSolver, ti_base.MultistageSolver)
+    )
 
     if optimizer is None:
         optimizer = opt.LevenbergMarquardt(system)
