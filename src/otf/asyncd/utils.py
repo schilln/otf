@@ -149,7 +149,7 @@ def run_update(
             true_observed[start - k + 1 :],
             **assimilated_args,
         )
-        end = start + len(tls) - k + 1
+        end += len(tls) - k
 
         assimilated0 = assimilated[-k:]
 
