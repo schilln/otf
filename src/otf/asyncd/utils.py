@@ -118,16 +118,15 @@ def run_update(
     t0 = T0
     tf = t0 + t_relax
 
-    start = 0
     assimilated, tls = assimilated_solver.solve_assimilated(
-        assimilated0, t0, tf, dt, true_observed[start:]
+        assimilated0, t0, tf, dt, true_observed
     )
-    end = start + len(tls)
+    end = len(tls)
 
     assimilated0 = assimilated[-k:]
 
     # Update parameters
-    system.cs = optimizer(true_observed[end], assimilated[-1])
+    system.cs = optimizer(true_observed[end - 1], assimilated[-1])
     cs.append(system.cs)
 
     t0 = tls[-1]
@@ -135,11 +134,11 @@ def run_update(
 
     # Relative error
     errors.append(
-        np.linalg.norm(true_observed[start + 1 : end] - assimilated[1:])
-        / np.linalg.norm(true_observed[start + 1 : end])
+        np.linalg.norm(true_observed[1:end] - assimilated[1:])
+        / np.linalg.norm(true_observed[1:end])
     )
 
-    start = end
+    start = end - 1
 
     while tf <= Tf:
         assimilated, tls = assimilated_solver.solve_assimilated(
@@ -150,12 +149,12 @@ def run_update(
             true_observed[start - k + 1 :],
             **assimilated_args,
         )
-        end = start + len(tls) - k
+        end = start + len(tls) - k + 1
 
         assimilated0 = assimilated[-k:]
 
         # Update parameters
-        system.cs = optimizer(true_observed[end], assimilated[-1])
+        system.cs = optimizer(true_observed[end - 1], assimilated[-1])
         cs.append(system.cs)
 
         t0 = tls[-1]
@@ -163,9 +162,11 @@ def run_update(
 
         # Relative error
         errors.append(
-            np.linalg.norm(true_observed[start:end] - assimilated[k:])
-            / np.linalg.norm(true_observed[start:end])
+            np.linalg.norm(true_observed[start + 1 : end] - assimilated[k:])
+            / np.linalg.norm(true_observed[start + 1 : end])
         )
+
+        start = end - 1
 
     errors = np.array(errors)
 
