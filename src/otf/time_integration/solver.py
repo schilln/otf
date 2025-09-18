@@ -7,12 +7,14 @@ jndarray = jnp.ndarray
 
 
 class ForwardEuler(MultistepSolver):
+    _k = 1
+
     def __init__(self, system: BaseSystem):
         """Forward Euler solver.
 
         See documentation of `base_solver.SinglestepSolver`.
         """
-        super().__init__(system, None, 1)
+        super().__init__(system, None)
 
     def solve_true(
         self,
@@ -71,6 +73,8 @@ class ForwardEuler(MultistepSolver):
 
 
 class TwoStepAdamsBashforth(MultistepSolver):
+    _k = 2
+
     def __init__(self, system: BaseSystem, pre_multistep_solver: BaseSolver):
         """Two-step Adams–Bashforth solver.
 
@@ -79,7 +83,7 @@ class TwoStepAdamsBashforth(MultistepSolver):
         See https://en.wikipedia.org/wiki/Linear_multistep_method#Two-step_Adams%E2%80%93Bashforth
         """
 
-        super().__init__(system, pre_multistep_solver, 2)
+        super().__init__(system, pre_multistep_solver)
 
     def _step_factory(self):
         def step_true(i, vals):

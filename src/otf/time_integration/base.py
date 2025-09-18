@@ -168,28 +168,41 @@ class MultistageSolver(BaseSolver):
 
 
 class MultistepSolver(BaseSolver):
-    def __init__(
-        self, system: BaseSystem, pre_multistep_solver: BaseSolver, k: int
-    ):
-        """Abstract base class for multistep solvers (e.g., two-step
-        Adams–Bashforth).
+    """Abstract base class for multistep solvers (e.g., two-step
+    Adams–Bashforth).
 
-        See documentation of `Solver`.
+    See documentation of `Solver`.
+
+    Attributes
+    ----------
+    k
+        Number of steps used in solver
+        `_k` must be defined by subclasses (accessed through `k` defined in this
+        class as a property).
+    """
+
+    def __init__(self, system: BaseSystem, pre_multistep_solver: BaseSolver):
+        """
 
         Parameters
         ----------
         pre_multistep_solver
             An instantiated `Solver` to use until enough steps have been taken
             to use the multistep solver
-        k
-            The number of steps used in this multistep solver
         """
         super().__init__(system)
 
         self._step_true, self._step_assimilated = self._step_factory()
 
-        self._k = k
         self._pre_multistep_solver = pre_multistep_solver
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not hasattr(cls, "_k") or cls._k < 2:
+            raise TypeError(
+                f"{cls.__name__} must define class attribute '_k' >= 2;"
+                " otherwise use `SinglestepSolver"
+            )
 
     def solve_true(
         self,
@@ -233,8 +246,13 @@ class MultistepSolver(BaseSolver):
 
             return true, tls
         else:
+            assert true0.shape[0] == self.k, (
+                "the first dimension of `true0` should have shape equal to"
+                " `k`, the number of steps used in the solver"
+            )
+
             true, tls = self._init_solve(
-                true0[0] if true0.ndim > 1 else true0,
+                true0[0],
                 t0 - dt * (self.k - 1),
                 tf,
                 dt,
@@ -290,8 +308,13 @@ class MultistepSolver(BaseSolver):
 
             return assimilated, tls
         else:
+            assert assimilated0.shape[0] == self.k, (
+                "the first dimension of `assimilated0` should have shape equal"
+                " to `k`, the number of steps used in the solver"
+            )
+
             assimilated, tls = self._init_solve(
-                assimilated0[0] if assimilated0.ndim > 1 else assimilated0,
+                assimilated0[0],
                 t0 - dt * (self.k - 1),
                 tf,
                 dt,
