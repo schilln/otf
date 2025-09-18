@@ -1,6 +1,7 @@
 """Abstract base classes to simulate `System`s forward in time."""
 
 from collections.abc import Callable
+from functools import cached_property
 
 from jax import lax
 from jax import numpy as jnp
@@ -274,6 +275,11 @@ class MultistepSolver(BaseSolver):
         Number of steps used in solver
         `_k` must be defined by subclasses (accessed through `k` defined in this
         class as a property).
+
+    Properties
+    ----------
+    uses_multistage
+        True if this solver instance uses a `MultistageSolver` at any point
     """
 
     def __init__(self, system: BaseSystem, pre_multistep_solver: BaseSolver):
@@ -298,6 +304,15 @@ class MultistepSolver(BaseSolver):
                 f"{cls.__name__} must define class attribute '_k' >= 2;"
                 " otherwise use `SinglestepSolver"
             )
+
+    @cached_property
+    def uses_multistage(self) -> bool:
+        if isinstance(self._pre_multistep_solver, MultistageSolver):
+            return True
+        elif isinstance(self._pre_multistep_solver, MultistepSolver):
+            return self._pre_multistep_solver.uses_multistage
+        else:
+            return False
 
     def solve_true(
         self,
