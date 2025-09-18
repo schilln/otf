@@ -1,45 +1,21 @@
 from jax import numpy as jnp
 
 from ..system import BaseSystem
-from .base import MultistageSolver, MultistepSolver, BaseSolver
+from .base import (
+    BaseSolver,
+    MultistageSolver,
+    MultistepSolver,
+    SinglestepSolver,
+)
 
 jndarray = jnp.ndarray
 
 
-class ForwardEuler(MultistepSolver):
-    def __init__(self, system: BaseSystem):
-        """Forward Euler solver.
+class ForwardEuler(SinglestepSolver):
+    """Forward Euler solver.
 
-        See documentation of `base_solver.SinglestepSolver`.
-        """
-        super().__init__(system, None, 1)
-
-    def solve_true(
-        self,
-        true0: jndarray,
-        t0: float,
-        tf: float,
-        dt: float,
-        start_with_multistep: bool = True,
-    ) -> tuple[jndarray, jndarray]:
-        # Note: `start_with_multistep` is ignored but kept for consistency with
-        # multistep solvers.
-        return super().solve_true(true0, t0, tf, dt, True)
-
-    def solve_assimilated(
-        self,
-        assimilated0: jndarray,
-        t0: float,
-        tf: float,
-        dt: float,
-        true_observed: jndarray,
-        start_with_multistep: bool = True,
-    ):
-        # Note: `start_with_multistep` is ignored but kept for consistency with
-        # multistep solvers.
-        return super().solve_assimilated(
-            assimilated0, t0, tf, dt, true_observed, True
-        )
+    See documentation of `SinglestepSolver`.
+    """
 
     def _step_factory(self):
         def step_true(i, vals):
@@ -71,6 +47,8 @@ class ForwardEuler(MultistepSolver):
 
 
 class TwoStepAdamsBashforth(MultistepSolver):
+    _k = 2
+
     def __init__(self, system: BaseSystem, pre_multistep_solver: BaseSolver):
         """Two-step Adams–Bashforth solver.
 
@@ -79,7 +57,7 @@ class TwoStepAdamsBashforth(MultistepSolver):
         See https://en.wikipedia.org/wiki/Linear_multistep_method#Two-step_Adams%E2%80%93Bashforth
         """
 
-        super().__init__(system, pre_multistep_solver, 2)
+        super().__init__(system, pre_multistep_solver)
 
     def _step_factory(self):
         def step_true(i, vals):
