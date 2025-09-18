@@ -32,7 +32,6 @@ def run_update(
     optimizer: Callable[[jndarray, jndarray], jndarray]
     | optim_base.BaseOptimizer
     | None = None,
-    tls_=None,
 ) -> tuple[jndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
