@@ -21,8 +21,11 @@ class BaseSolver:
 
     Methods
     -------
+    solve_true
+        Given a `System_ModelKnown`, simulate the true system forward in time.
     solve
-        Simulate `self.system` forward in time.
+        Simulate true and data assimilated systems forward in time
+        simultaneously.
 
     Abstract Methods
     ----------------
@@ -82,10 +85,9 @@ class MultistageSolver(BaseSolver):
     """Abstract base class for non-multistep solvers (e.g., multistage solvers
     such as 4th-order Runge–Kutta).
 
-    Methods
-    -------
-    solve_true
-        S
+    These solvers require that the system be of type `System_ModelKnown`, as
+    `solve_true` requires this (of course) and multistage methods seem to
+    require knowledge of the true model when nudging.
     """
 
     def __init__(self, system: System_ModelKnown):
@@ -169,6 +171,16 @@ class MultistageSolver(BaseSolver):
 
 
 class SinglestepSolver(BaseSolver):
+    """Abstract base class for single-step solvers (e.g., forward Euler or
+    backward Euler).
+
+    Methods
+    -------
+    solve_assimilated
+        Solve data assimilated system forward in time using observations of the
+        true system state.
+    """
+
     def __init__(self, system: BaseSystem):
         super().__init__(system)
 
