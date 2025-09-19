@@ -1,3 +1,7 @@
+from functools import partial
+
+import scipy
+from jax import jit
 from jax import numpy as jnp
 
 from ..system import BaseSystem
@@ -221,3 +225,143 @@ class RK4(MultistageSolver):
             return (true, assimilated), (dt, cs)
 
         return step_true, step
+
+
+class SolveIvp(MultistageSolver):
+    def __init__(self, system: BaseSystem, options: dict = dict()):
+        """Wrapper around `scipy.integrate.solve_ivp` implementing the same
+        external interface as `MultistageSolver`.
+
+        Note that this class does not use or implement all methods defined in
+        its parent class since it uses `solve_ivp` (instead of a custom
+        implementation of an ODE-solving algorithm using jax).
+
+        See documentation of `MultistageSolver`.
+
+        Parameters
+        ----------
+        system
+            An instance of `BaseSystem` to simulate forward in time.
+        options
+            Optional arguments that will be passed directly to `solve_ivp`
+
+        Methods
+        -------
+        solve
+            Simulate `self.system` forward in time.
+
+        Attributes
+        ----------
+        system
+            The `system` passed to `__init__`; read-only
+        options
+            The `options` passed to `__init__`, but may be modified at any time
+        """
+        self._system = system
+        self.options = options
+
+    def solve_true(
+        self,
+        true0: jndarray,
+        t0: float,
+        tf: float,
+        dt: float,
+    ) -> tuple[jndarray, jndarray]:
+        self._true_shape = true0.shape
+
+        tls = t0 + jnp.arange(round((tf - t0) / dt)) * dt
+
+        result = scipy.integrate.solve_ivp(
+            self._ode_true,
+            (t0, tf),
+            true0,
+            t_eval=tls,
+            **self.options,
+        )
+
+        true = result.y.reshape(*self._true_shape, -1)
+        return true.T, tls
+
+    def solve(
+        self,
+        true0: jndarray,
+        assimilated0: jndarray,
+        t0: float,
+        tf: float,
+        dt: float,
+    ) -> tuple[jndarray, jndarray, jndarray]:
+        self._true_shape = true0.shape
+        self._assimilated_shape = assimilated0.shape
+
+        # The index at which data assimilated states start (to be used in
+        # `_unpack` and `_unpack_sequence`)
+        self._assimilated_idx = true0.size
+
+        s0 = self._pack(true0, assimilated0)
+        tls = t0 + jnp.arange(round((tf - t0) / dt)) * dt
+
+        result = scipy.integrate.solve_ivp(
+            self._ode,
+            (t0, tf),
+            s0,
+            t_eval=tls,
+            args=(self.system.cs,),
+            **self.options,
+        )
+
+        true, assimilated = self._unpack_sequence(result.y)
+        return true.T, assimilated.T, tls
+
+    @partial(jit, static_argnames="self")
+    def _ode_true(self, _, s: jndarray):
+        """Wrap `self.system.f_true` using the interface that `solve_ivp`
+        expects.
+        """
+        true = s.reshape(self._true_shape)
+
+        return self.system.f_true(true).ravel()
+
+    @partial(jit, static_argnames="self")
+    def _ode(self, _, s: jndarray, cs):
+        """Wrap `self.system.f_true` and `self.system.f_assimilated` together
+        using the interface that `solve_ivp` expects.
+        """
+        true, assimilated = self._unpack(s)
+
+        return self._pack(
+            self.system.f_true(true),
+            self.system.f_assimilated(cs, true, assimilated),
+        )
+
+    @partial(jit, static_argnames="self")
+    def _pack(self, true: jndarray, assimilated: jndarray):
+        """Pack true and data assimilated states into one array for use in
+        `solve_ivp`.
+        """
+        return jnp.concatenate([true.ravel(), assimilated.ravel()])
+
+    @partial(jit, static_argnames="self")
+    def _unpack(self, s: jndarray):
+        """Unpack true and data assimilated states to use with
+        `self.system.f_true` and `self.system.f_assimilated`.
+        """
+        true = s[: self._assimilated_idx]
+        assimilated = s[self._assimilated_idx :]
+
+        return (
+            true.reshape(self._true_shape),
+            assimilated.reshape(self._assimilated_shape),
+        )
+
+    @partial(jit, static_argnames="self")
+    def _unpack_sequence(self, s: jndarray):
+        """Unpack sequences of true and data assimilated states (e.g., from the
+        result of `solve_ivp`).
+        """
+        true = s[: self._assimilated_idx]
+        assimilated = s[self._assimilated_idx :]
+
+        return (
+            true.reshape(*self._true_shape, -1),
+            assimilated.reshape(*self._assimilated_shape, -1),
+        )
