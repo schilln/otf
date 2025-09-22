@@ -22,7 +22,6 @@ class BaseSystem:
         self,
         mu: float,
         gs: jndarray,
-        bs: jndarray,
         cs: jndarray,
         observed_slice: slice,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
@@ -36,9 +35,6 @@ class BaseSystem:
             Nudging parameter
         gs
             Parameter values to be used by the "true" system
-        bs
-            Fixed parameter values to be used by the data assimilated system but
-            not to be updated (i.e., not to be estimated nor optimized)
         cs
             Estimated parameter values to be used by the data assimilate system,
             to be estimated/optimized (may or may not correspond to `gs`)
@@ -67,7 +63,6 @@ class BaseSystem:
         """
         self._mu = mu
         self._gs = gs
-        self._bs = bs
         self._observed_slice = observed_slice
         self._cs = cs
         self._assimilated_ode = assimilated_ode
@@ -145,7 +140,6 @@ class BaseSystem:
     # The following attributes are read-only.
     mu = property(lambda self: self._mu)
     gs = property(lambda self: self._gs)
-    bs = property(lambda self: self._bs)
     cs = property(lambda self: self._cs, _set_cs)
     observed_slice = property(lambda self: self._observed_slice)
     complex_differentiation = property(
@@ -170,7 +164,6 @@ class System_ModelKnown(BaseSystem):
         self,
         mu: float,
         gs: jndarray,
-        bs: jndarray,
         cs: jndarray,
         observed_slice: slice,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
@@ -190,7 +183,6 @@ class System_ModelKnown(BaseSystem):
         super().__init__(
             mu,
             gs,
-            bs,
             cs,
             observed_slice,
             assimilated_ode,
