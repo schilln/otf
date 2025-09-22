@@ -140,7 +140,7 @@ def run_update(
 
 def _run_update_not_multistep(
     system: BaseSystem,
-    solver: ti_base.MultistageSolver,
+    solver: ti_base.MultistageSolver | ti_base.SinglestepSolver,
     dt: float,
     T0: float,
     Tf: float,
