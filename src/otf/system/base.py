@@ -26,6 +26,7 @@ class BaseSystem:
         cs: jndarray,
         observed_slice: slice,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
+        complex_differentiation: bool = False,
     ):
         """
 
@@ -50,6 +51,10 @@ class BaseSystem:
             Function that computes the time derivative of the data assimilated
             state using the current estimated parameters `cs`.
             Parameters: (cs, true_observed, assimilated)
+        complex_differentiation
+            Set to True if state values may take complex values (e.g., if
+            time integrating Fourier coefficients). This allows
+            auto-differentiation to work.
 
         Methods
         -------
@@ -66,6 +71,8 @@ class BaseSystem:
         self._observed_slice = observed_slice
         self._cs = cs
         self._assimilated_ode = assimilated_ode
+
+        self._complex_differentiation = complex_differentiation
 
     def f_assimilated(
         self,
@@ -124,9 +131,11 @@ class BaseSystem:
     @partial(jax.jit, static_argnames="self")
     def _compute_w(self, cs: jndarray, assimilated: jndarray) -> jndarray:
         return (
-            jax.jacrev(self._assimilated_ode, 0)(cs, assimilated)[
-                self.observed_slice
-            ].T
+            jax.jacrev(
+                self._assimilated_ode,
+                0,
+                holomorphic=self.complex_differentiation,
+            )(cs, assimilated)[self.observed_slice].T
             / self.mu
         )
 
@@ -139,6 +148,9 @@ class BaseSystem:
     bs = property(lambda self: self._bs)
     cs = property(lambda self: self._cs, _set_cs)
     observed_slice = property(lambda self: self._observed_slice)
+    complex_differentiation = property(
+        lambda self: self._complex_differentiation
+    )
 
 
 class System_ModelKnown(BaseSystem):
@@ -163,6 +175,7 @@ class System_ModelKnown(BaseSystem):
         observed_slice: slice,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         true_ode: Callable[[jndarray, jndarray], jndarray],
+        complex_differentiation: bool = False,
     ):
         """
 
@@ -174,7 +187,15 @@ class System_ModelKnown(BaseSystem):
             Function that computes the time derivative of the true state
             Parameters: (gs, true)
         """
-        super().__init__(mu, gs, bs, cs, observed_slice, assimilated_ode)
+        super().__init__(
+            mu,
+            gs,
+            bs,
+            cs,
+            observed_slice,
+            assimilated_ode,
+            complex_differentiation,
+        )
 
         self._true_ode = true_ode
 
