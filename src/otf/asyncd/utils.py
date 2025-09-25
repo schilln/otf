@@ -30,6 +30,7 @@ def run_update(
     | optim_base.BaseOptimizer
     | None = None,
     lr_scheduler: lr_scheduler.LRScheduler = lr_scheduler.DummyLRScheduler(),
+    t_begin_updates: float | None = None,
 ) -> tuple[jndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
@@ -123,9 +124,10 @@ def run_update(
     assimilated0 = assimilated[-k:]
 
     # Update parameters
-    system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+    if t_begin_updates is None or t_begin_updates <= tf:
+        system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+        lr_scheduler.step()
     cs.append(system.cs)
-    lr_scheduler.step()
 
     t0 = tls[-1]
     tf = t0 + t_relax
@@ -152,9 +154,10 @@ def run_update(
         assimilated0 = assimilated[-k:]
 
         # Update parameters
-        system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+        if t_begin_updates is None or t_begin_updates <= tf:
+            system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+            lr_scheduler.step()
         cs.append(system.cs)
-        lr_scheduler.step()
 
         t0 = tls[-1]
         tf = t0 + t_relax
