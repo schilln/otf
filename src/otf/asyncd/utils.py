@@ -11,11 +11,7 @@ from jax import numpy as jnp
 from ..optim import base as optim_base
 from ..optim import optimizer as opt
 from ..system import BaseSystem
-from ..time_integration.base import (
-    MultistageSolver,
-    MultistepSolver,
-    SinglestepSolver,
-)
+from ..time_integration import base as ti_base
 
 jndarray = jnp.ndarray
 
@@ -23,7 +19,7 @@ jndarray = jnp.ndarray
 def run_update(
     system: BaseSystem,
     true_observed: jndarray,
-    assimilated_solver: SinglestepSolver | MultistepSolver,
+    assimilated_solver: ti_base.SinglestepSolver | ti_base.MultistepSolver,
     dt: float,
     T0: float,
     Tf: float,
@@ -91,9 +87,9 @@ def run_update(
 
     assimilated_args = dict()
 
-    if isinstance(assimilated_solver, SinglestepSolver):
+    if isinstance(assimilated_solver, ti_base.SinglestepSolver):
         k = 1
-    elif isinstance(assimilated_solver, MultistepSolver):
+    elif isinstance(assimilated_solver, ti_base.MultistepSolver):
         assimilated_args["start_with_multistep"] = True
         k = assimilated_solver.k
 
@@ -103,7 +99,7 @@ def run_update(
                 " its `pre_multistep_solver`; all pre-multistep solvers should"
                 " be singlestep or multistep"
             )
-    elif isinstance(assimilated_solver, MultistageSolver):
+    elif isinstance(assimilated_solver, ti_base.MultistageSolver):
         raise NotImplementedError(
             "`MultistageSolver` not yet supported for `assimilated_solver`;"
             " should be instance of subclass of `MultistepSolver`"
