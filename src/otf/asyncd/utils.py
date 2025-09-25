@@ -9,13 +9,10 @@ import numpy as np
 from jax import numpy as jnp
 
 from ..optim import base as optim_base
+from ..optim import lr_scheduler
 from ..optim import optimizer as opt
 from ..system import BaseSystem
-from ..time_integration.base import (
-    MultistageSolver,
-    MultistepSolver,
-    SinglestepSolver,
-)
+from ..time_integration import base as ti_base
 
 jndarray = jnp.ndarray
 
@@ -23,7 +20,7 @@ jndarray = jnp.ndarray
 def run_update(
     system: BaseSystem,
     true_observed: jndarray,
-    assimilated_solver: SinglestepSolver | MultistepSolver,
+    assimilated_solver: ti_base.SinglestepSolver | ti_base.MultistepSolver,
     dt: float,
     T0: float,
     Tf: float,
@@ -32,7 +29,10 @@ def run_update(
     optimizer: Callable[[jndarray, jndarray], jndarray]
     | optim_base.BaseOptimizer
     | None = None,
-) -> tuple[jndarray, np.ndarray, np.ndarray]:
+    lr_scheduler: lr_scheduler.LRScheduler = lr_scheduler.DummyLRScheduler(),
+    t_begin_updates: float | None = None,
+    return_all: bool = False,
+) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
     and errors between assimilated and true states.
@@ -67,6 +67,12 @@ def run_update(
         Note that an instance of `optim.base.BaseOptimizer` implements this
         interface.
         If None, defaults to `optim.optimizer.LevenbergMarquardt`.
+    lr_scheduler
+        Instance of `base_optim.LRScheduler` to update optimizer learning rate.
+    t_begin_updates
+        Perform parameter updates after this time.
+    return_all
+        If true, return data assimilated states for entire simulation.
 
     Returns
     -------
@@ -82,6 +88,9 @@ def run_update(
         The actual linspace of time values used, in multiples of `t_relax` from
         `T0` to approximately `Tf`
         shape (N + 1,) where N is the number of parameter updates performed
+    assimilated
+        Data assimilated states for final iteration of length `t_relax`, or if
+        `return_all` is True, then assimilated states for entire simulation.
     """
     if optimizer is None:
         optimizer = opt.LevenbergMarquardt(system)
@@ -91,9 +100,9 @@ def run_update(
 
     assimilated_args = dict()
 
-    if isinstance(assimilated_solver, SinglestepSolver):
+    if isinstance(assimilated_solver, ti_base.SinglestepSolver):
         k = 1
-    elif isinstance(assimilated_solver, MultistepSolver):
+    elif isinstance(assimilated_solver, ti_base.MultistepSolver):
         assimilated_args["start_with_multistep"] = True
         k = assimilated_solver.k
 
@@ -103,16 +112,19 @@ def run_update(
                 " its `pre_multistep_solver`; all pre-multistep solvers should"
                 " be singlestep or multistep"
             )
-    elif isinstance(assimilated_solver, MultistageSolver):
+    elif isinstance(assimilated_solver, ti_base.MultistageSolver):
         raise NotImplementedError(
             "`MultistageSolver` not yet supported for `assimilated_solver`;"
             " should be instance of subclass of `MultistepSolver`"
         )
     else:
         raise NotImplementedError(
-            "``assimilated_solver` should be instance of subclass of"
+            "`assimilated_solver` should be instance of subclass of"
             " `SinglestepSolver` or `MultistepSolver`"
         )
+
+    if return_all:
+        assimilateds = [np.expand_dims(assimilated0, 0)]
 
     t0 = T0
     tf = t0 + t_relax
@@ -122,10 +134,15 @@ def run_update(
     )
     end = len(tls)
 
+    if return_all:
+        assimilateds.append(assimilated[1:])
+
     assimilated0 = assimilated[-k:]
 
     # Update parameters
-    system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+    if t_begin_updates is None or t_begin_updates <= tf:
+        system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+        lr_scheduler.step()
     cs.append(system.cs)
 
     t0 = tls[-1]
@@ -150,10 +167,15 @@ def run_update(
         )
         end += len(tls) - k
 
+        if return_all:
+            assimilateds.append(assimilated[assimilated_solver.k :])
+
         assimilated0 = assimilated[-k:]
 
         # Update parameters
-        system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+        if t_begin_updates is None or t_begin_updates <= tf:
+            system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+            lr_scheduler.step()
         cs.append(system.cs)
 
         t0 = tls[-1]
@@ -172,4 +194,9 @@ def run_update(
     # Note the last `t0` is the actual final time of the simulation.
     tls = np.linspace(T0, t0, len(errors) + 1)
 
-    return jnp.stack(cs), errors, tls
+    return (
+        jnp.stack(cs),
+        errors,
+        tls,
+        np.concatenate(assimilateds) if return_all else assimilated,
+    )
