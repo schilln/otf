@@ -9,6 +9,7 @@ import numpy as np
 from jax import numpy as jnp
 
 from ..optim import base as optim_base
+from ..optim import lr_scheduler
 from ..optim import optimizer as opt
 from ..system import BaseSystem
 from ..time_integration import base as ti_base
@@ -28,6 +29,7 @@ def run_update(
     optimizer: Callable[[jndarray, jndarray], jndarray]
     | optim_base.BaseOptimizer
     | None = None,
+    lr_scheduler: lr_scheduler.LRScheduler = lr_scheduler.DummyLRScheduler(),
 ) -> tuple[jndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
@@ -123,6 +125,7 @@ def run_update(
     # Update parameters
     system.cs = optimizer(true_observed[end - 1], assimilated[-1])
     cs.append(system.cs)
+    lr_scheduler.step()
 
     t0 = tls[-1]
     tf = t0 + t_relax
@@ -151,6 +154,7 @@ def run_update(
         # Update parameters
         system.cs = optimizer(true_observed[end - 1], assimilated[-1])
         cs.append(system.cs)
+        lr_scheduler.step()
 
         t0 = tls[-1]
         tf = t0 + t_relax
