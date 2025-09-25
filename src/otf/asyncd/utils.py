@@ -106,7 +106,7 @@ def run_update(
         )
     else:
         raise NotImplementedError(
-            "``assimilated_solver` should be instance of subclass of"
+            "`assimilated_solver` should be instance of subclass of"
             " `SinglestepSolver` or `MultistepSolver`"
         )
 
