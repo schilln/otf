@@ -236,20 +236,27 @@ def _run_update_multistep(
     """
     assert isinstance(solver, ti_base.MultistepSolver)
 
-    if return_all:
-        raise NotImplementedError("`return_all` not implemented yet")
-
     if optimizer is None:
         optimizer = opt.LevenbergMarquardt(system)
 
     cs = [system.cs]
     errors = []
 
+    if return_all:
+        trues, assimilateds = (
+            [np.expand_dims(true0, 0)],
+            [np.expand_dims(assimilated0, 0)],
+        )
+
     # First iteration
     t0 = T0
     tf = t0 + t_relax
 
     true, assimilated, tls = solver.solve(true0, assimilated0, t0, tf, dt)
+
+    if return_all:
+        trues.append(true[1:])
+        assimilateds.append(assimilated[1:])
 
     true0, assimilated0 = true[-solver.k :], assimilated[-solver.k :]
 
@@ -296,9 +303,19 @@ def _run_update_multistep(
             / np.linalg.norm(true[solver.k :])
         )
 
+        if return_all:
+            trues.append(true[solver.k :])
+            assimilateds.append(assimilated[solver.k :])
+
     errors = np.array(errors)
 
     # Note the last `t0` is the actual final time of the simulation.
     tls = np.linspace(T0, t0, len(errors) + 1)
 
-    return jnp.stack(cs), errors, tls, true, assimilated
+    return (
+        jnp.stack(cs),
+        errors,
+        tls,
+        np.concatenate(trues) if return_all else true,
+        np.concatenate(assimilateds) if return_all else assimilated,
+    )
