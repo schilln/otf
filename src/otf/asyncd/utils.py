@@ -31,7 +31,8 @@ def run_update(
     | None = None,
     lr_scheduler: lr_scheduler.LRScheduler = lr_scheduler.DummyLRScheduler(),
     t_begin_updates: float | None = None,
-) -> tuple[jndarray, np.ndarray, np.ndarray]:
+    return_all: bool = False,
+) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
     and errors between assimilated and true states.
@@ -113,6 +114,9 @@ def run_update(
             " `SinglestepSolver` or `MultistepSolver`"
         )
 
+    if return_all:
+        assimilateds = [np.expand_dims(assimilated0, 0)]
+
     t0 = T0
     tf = t0 + t_relax
 
@@ -120,6 +124,9 @@ def run_update(
         assimilated0, t0, tf, dt, true_observed
     )
     end = len(tls)
+
+    if return_all:
+        assimilateds.append(assimilated[1:])
 
     assimilated0 = assimilated[-k:]
 
@@ -151,6 +158,9 @@ def run_update(
         )
         end += len(tls) - k
 
+        if return_all:
+            assimilateds.append(assimilated[assimilated_solver.k :])
+
         assimilated0 = assimilated[-k:]
 
         # Update parameters
@@ -175,4 +185,9 @@ def run_update(
     # Note the last `t0` is the actual final time of the simulation.
     tls = np.linspace(T0, t0, len(errors) + 1)
 
-    return jnp.stack(cs), errors, tls
+    return (
+        jnp.stack(cs),
+        errors,
+        tls,
+        np.concatenate(assimilateds) if return_all else assimilated,
+    )
