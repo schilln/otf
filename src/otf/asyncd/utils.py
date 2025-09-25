@@ -67,6 +67,12 @@ def run_update(
         Note that an instance of `optim.base.BaseOptimizer` implements this
         interface.
         If None, defaults to `optim.optimizer.LevenbergMarquardt`.
+    lr_scheduler
+        Instance of `base_optim.LRScheduler` to update optimizer learning rate.
+    t_begin_updates
+        Perform parameter updates after this time.
+    return_all
+        If true, return data assimilated states for entire simulation.
 
     Returns
     -------
@@ -82,6 +88,9 @@ def run_update(
         The actual linspace of time values used, in multiples of `t_relax` from
         `T0` to approximately `Tf`
         shape (N + 1,) where N is the number of parameter updates performed
+    assimilated
+        Data assimilated states for final iteration of length `t_relax`, or if
+        `return_all` is True, then assimilated states for entire simulation.
     """
     if optimizer is None:
         optimizer = opt.LevenbergMarquardt(system)
