@@ -65,17 +65,39 @@ class BaseSolver:
         tls
             The time linspace
         """
+        num_steps = self.compute_num_steps(t0, tf, dt)
+
         # `arange` doesn't like floating point values.
-        tls = t0 + jnp.arange(round((tf - t0) / dt)) * dt
-        N = len(tls)
+        tls = t0 + jnp.arange(num_steps) * dt
 
         # Store the solution at every step.
-        state = jnp.full((N, *state0.shape), jnp.inf, dtype=state0.dtype)
+        state = jnp.full(
+            (num_steps, *state0.shape), jnp.inf, dtype=state0.dtype
+        )
 
         # Set initial state.
         state = state.at[0].set(state0)
 
         return state, tls
+
+    @staticmethod
+    def compute_num_steps(t0: float, tf: float, dt: float) -> int:
+        """Compute the number of time steps used to integrate over an interval.
+
+        Parameters
+        ----------
+        t0, tf
+            Initial and (approximate) final times over which to simulate
+        dt
+            Simulation step size
+
+        Returns
+        -------
+        num_steps
+            Number of steps used to integrate from `t0` to `tf` with steps of
+            size `dt`
+        """
+        return round((tf - t0) / dt)
 
     # The following attribute is read-only.
     system = property(lambda self: self._system)
@@ -213,10 +235,7 @@ class SinglestepSolver(BaseSolver):
             1,
             len(assimilated),
             self._step_assimilated,
-            (
-                assimilated,
-                (dt, self.system.cs, true_observed[: len(assimilated)]),
-            ),
+            (assimilated, (dt, self.system.cs, true_observed)),
         )
 
         return assimilated, tls
@@ -419,7 +438,7 @@ class MultistepSolver(BaseSolver):
             # Note upper bound is exclusive, so the span is really
             # [t0, t0 + dt, ..., t0 + dt * (k-1)], for a total of k steps.
             assimilated0, _ = self._pre_multistep_solver.solve_assimilated(
-                assimilated0, t0, t0 + dt * self.k, dt, true_observed
+                assimilated0, t0, t0 + dt * self.k, dt, true_observed[: self.k]
             )
 
             assimilated = assimilated.at[1 : self.k].set(assimilated0[1:])
@@ -428,10 +447,7 @@ class MultistepSolver(BaseSolver):
                 self.k,
                 len(assimilated),
                 self._step_assimilated,
-                (
-                    assimilated,
-                    (dt, self.system.cs, true_observed[: len(assimilated)]),
-                ),
+                (assimilated, (dt, self.system.cs, true_observed)),
             )
 
             return assimilated, tls
@@ -453,10 +469,7 @@ class MultistepSolver(BaseSolver):
                 self.k,
                 len(assimilated),
                 self._step_assimilated,
-                (
-                    assimilated,
-                    (dt, self.system.cs, true_observed[: len(assimilated)]),
-                ),
+                (assimilated, (dt, self.system.cs, true_observed)),
             )
 
             return assimilated, tls
