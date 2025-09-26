@@ -213,7 +213,10 @@ class SinglestepSolver(BaseSolver):
             1,
             len(assimilated),
             self._step_assimilated,
-            (assimilated, (dt, self.system.cs, true_observed)),
+            (
+                assimilated,
+                (dt, self.system.cs, true_observed[: len(assimilated)]),
+            ),
         )
 
         return assimilated, tls
@@ -425,7 +428,10 @@ class MultistepSolver(BaseSolver):
                 self.k,
                 len(assimilated),
                 self._step_assimilated,
-                (assimilated, (dt, self.system.cs, true_observed)),
+                (
+                    assimilated,
+                    (dt, self.system.cs, true_observed[: len(assimilated)]),
+                ),
             )
 
             return assimilated, tls
@@ -447,7 +453,10 @@ class MultistepSolver(BaseSolver):
                 self.k,
                 len(assimilated),
                 self._step_assimilated,
-                (assimilated, (dt, self.system.cs, true_observed)),
+                (
+                    assimilated,
+                    (dt, self.system.cs, true_observed[: len(assimilated)]),
+                ),
             )
 
             return assimilated, tls
