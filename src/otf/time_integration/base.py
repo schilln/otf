@@ -231,6 +231,9 @@ class SinglestepSolver(BaseSolver):
     ) -> tuple[jndarray, jndarray]:
         assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
 
+        if len(true_observed) < len(assimilated):
+            raise IndexError("too few `true_observed` states given")
+
         assimilated, _ = lax.fori_loop(
             1,
             len(assimilated),
@@ -434,6 +437,9 @@ class MultistepSolver(BaseSolver):
         if not start_with_multistep:
             assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
 
+            if len(true_observed) < len(assimilated):
+                raise IndexError("too few `true_observed` states given")
+
             # Need k-1 previous steps to use k-step solver.
             # Note upper bound is exclusive, so the span is really
             # [t0, t0 + dt, ..., t0 + dt * (k-1)], for a total of k steps.
@@ -463,6 +469,10 @@ class MultistepSolver(BaseSolver):
                 tf,
                 dt,
             )
+
+            if len(true_observed) < len(assimilated):
+                raise IndexError("too few `true_observed` states given")
+
             assimilated = assimilated.at[1 : self.k].set(assimilated0[1:])
 
             assimilated, _ = lax.fori_loop(
