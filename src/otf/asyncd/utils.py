@@ -129,10 +129,11 @@ def run_update(
     t0 = T0
     tf = t0 + t_relax
 
+    num_steps = assimilated_solver.compute_num_steps(t0, tf, dt)
+    end = num_steps
     assimilated, tls = assimilated_solver.solve_assimilated(
-        assimilated0, t0, tf, dt, true_observed
+        assimilated0, t0, tf, dt, true_observed[:end]
     )
-    end = len(tls)
 
     if return_all:
         assimilateds.append(assimilated[1:])
@@ -157,15 +158,16 @@ def run_update(
     start = end - 1
 
     while tf <= Tf:
+        num_steps = assimilated_solver.compute_num_steps(t0, tf, dt)
+        end += num_steps - (k - 1)
         assimilated, tls = assimilated_solver.solve_assimilated(
             assimilated0,
             t0,
             tf,
             dt,
-            true_observed[start - k + 1 :],
+            true_observed[start - k + 1 : end],
             **assimilated_args,
         )
-        end += len(tls) - k
 
         if return_all:
             assimilateds.append(assimilated[assimilated_solver.k :])
