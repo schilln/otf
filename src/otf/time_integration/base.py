@@ -80,6 +80,67 @@ class BaseSolver:
 
         return state, tls
 
+    def solve_true(
+        self,
+        true0: jndarray,
+        t0: float,
+        tf: float,
+        dt: float,
+    ) -> tuple[jndarray, jndarray]:
+        """Solve the true system from `t0` to (approximately) `tf` with steps of
+        size `dt`.
+
+        Parameters
+        ----------
+        true0
+            Initial state of true system
+        t0, tf
+            Initial and (approximate) final times over which to simulate
+        dt
+            Simulation step size
+
+        Returns
+        -------
+        true
+            True states
+        tls
+            Array of time points
+        """
+        raise NotImplementedError()
+
+    def solve(
+        self,
+        true0: jndarray,
+        assimilated0: jndarray,
+        t0: float,
+        tf: float,
+        dt: float,
+    ) -> tuple[jndarray, jndarray, jndarray]:
+        """Solve the true and data assimilated systems together from `t0` to
+        (approximately) `tf` with steps of size `dt`.
+
+        Parameters
+        ----------
+        true0
+            Initial state of true system
+        assimilated0
+            Initial state of data assimilated system
+        t0, tf
+            Initial and (approximate) final times over which to simulate
+        dt
+            Simulation step size
+
+        Returns
+        -------
+        true
+            True states
+        assimilated
+            Data assimilated states
+        tls
+            Array of time points
+        """
+        raise NotImplementedError()
+
     @staticmethod
     def compute_num_steps(t0: float, tf: float, dt: float) -> int:
         """Compute the number of time steps used to integrate over an interval.
@@ -196,6 +257,8 @@ class SinglestepSolver(BaseSolver):
     """Abstract base class for single-step solvers (e.g., forward Euler or
     backward Euler).
 
+    See documentation for `BaseSolver`.
+
     Methods
     -------
     solve_assimilated
@@ -229,6 +292,30 @@ class SinglestepSolver(BaseSolver):
         dt: float,
         true_observed: jndarray,
     ) -> tuple[jndarray, jndarray]:
+        """See documentation for `BaseSolver`.
+
+        Parameters
+        ----------
+        assimilated0
+            Initial state of data assimilated system
+        true_observed
+            Observed true states
+
+            When using the same time step `dt` with each call to this method,
+            for optimal performance the exact number of observed true states
+            required for the integration interval and step size should be given.
+            If additional trailing states are given, they will not be used, but
+            the benefits of jit compiling will not be reaped. (Each call to this
+            method uses the same jit-compiled loop of time integration steps as
+            long as the shape of the data passed in doesn't change.)
+
+        Returns
+        -------
+        assimilated
+            Data assimilated states
+        tls
+            Array of time points
+        """
         assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
 
         if len(true_observed) < len(assimilated):
@@ -304,7 +391,13 @@ class MultistepSolver(BaseSolver):
     """Abstract base class for multistep solvers (e.g., two-step
     Adams–Bashforth).
 
-    See documentation of `Solver`.
+    See documentation for `BaseSolver`.
+
+    Methods
+    -------
+    solve_assimilated
+        Solve data assimilated system forward in time using observations of the
+        true system state.
 
     Attributes
     ----------
@@ -325,8 +418,8 @@ class MultistepSolver(BaseSolver):
         Parameters
         ----------
         pre_multistep_solver
-            An instantiated `Solver` to use until enough steps have been taken
-            to use the multistep solver
+            An instantiated `BaseSolver` to use until enough steps have been
+            taken to use the multistep solver
         """
         super().__init__(system)
 
@@ -359,15 +452,21 @@ class MultistepSolver(BaseSolver):
         dt: float,
         start_with_multistep: bool = False,
     ) -> tuple[jndarray, jndarray]:
-        """See documentation for `Solver`.
+        """See documentation for `BaseSolver`.
 
-        The final entry of `true0` corresponds to `t0`, while preceding entries
-        `true0[-2]`, `true0[-3]`, ... correspond to t0 - dt, t0 - 2*dt, ...
+        Parameters
+        ----------
+        true0
+            Initial state(s) of true system
 
-        If `start_with_multistep` is True, then `true0` should have shape
-        (k, ...) where k is the number of steps used in the multistep solver,
-        and the remaining dimensions are as usual (i.e., contain the state at
-        one step).
+            If `start_with_multistep` is True, then `true0` should have shape
+            (k, ...) where k is the number of steps used in the multistep
+            solver, and the remaining dimensions are as usual (i.e., contain the
+            state at one step). The final entry of `true0` corresponds to `t0`,
+            while preceding entries `true0[-2]`, `true0[-3]`, ... correspond to
+            t0 - dt, t0 - 2*dt, ...
+        start_with_multistep
+            If true, use the first `self.k` states of `true0` as initial states.
         """
         assert isinstance(self.system, System_ModelKnown), (
             "`system` must be of type `System_ModelKnown`"
@@ -421,16 +520,44 @@ class MultistepSolver(BaseSolver):
         true_observed: jndarray,
         start_with_multistep: bool = False,
     ) -> tuple[jndarray, jndarray]:
-        """See documentation for `Solver`.
+        """See documentation for `BaseSolver`.
 
-        The final entry of `assimilated0` corresponds to `t0`, while preceding
-        entries `assimilated0[-2]`, `assimilated0[-3]`, ... correspond to
-        t0 - dt, t0 - 2*dt, ...
+        Parameters
+        ----------
+        assimilated0
+            Initial state(s) of data assimilated system
 
-        If `start_with_multistep` is True, then `assimilated0` should have shape
-        (k, ...) where k is the number of steps used in the multistep solver,
-        and the remaining dimensions are as usual (i.e., contain the state at
-        one step).
+            If `start_with_multistep` is True, then `assimilated0` should have
+            shape (k, ...) where k is the number of steps used in the multistep
+            solver, and the remaining dimensions are as usual (i.e., contain the
+            state at one step). The final entry of `assimilated0` corresponds to
+            `t0`, while preceding entries `assimilated0[-2]`,
+            `assimilated0[-3]`, ... correspond to t0 - dt, t0 - 2*dt, ...
+        true_observed
+            Observed true states
+
+            First entries should align with `assimilated0`. For example, if
+            `start_with_multistep` is True and this solver uses k = 2 steps,
+            then `true_observed[0]` should correspond to t0 - dt and
+            `true_observed[1]` should correspond to t0.
+
+            When using the same time step `dt` with each call to this method,
+            for optimal performance the exact number of observed true states
+            required for the integration interval and step size should be given.
+            If additional trailing states are given, they will not be used, but
+            the benefits of jit compiling will not be reaped. (Each call to this
+            method uses the same jit-compiled loop of time integration steps as
+            long as the shape of the data passed in doesn't change.)
+        start_with_multistep
+            If true, use the first `self.k` states of `assimilated0` as initial
+            states.
+
+        Returns
+        -------
+        assimilated
+            Data assimilated states
+        tls
+            Array of time points
         """
         # Don't have enough steps to use multistep solver, so use some other
         # solver to start.
