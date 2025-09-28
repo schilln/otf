@@ -9,10 +9,20 @@ theme:
   features:
     - content.action.edit
     - content.action.view
+    - content.code.copy
     - navigation.indexes
   icon:
     edit: material/pencil
     view: material/eye
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
 
 plugins:
   - api-autonav:
