@@ -1,0 +1,34 @@
+site_name: On-the-fly Data Assimilation
+repo_url: https://github.com/schilln/otf
+repo_name: schilln/otf
+edit_uri: blob/main/docs/
+nav:
+  - Home: index.md
+theme:
+  name: material
+  features:
+    - content.action.edit
+    - content.action.view
+    - navigation.indexes
+  icon:
+    edit: material/pencil
+    view: material/eye
+
+plugins:
+  - api-autonav:
+      modules: ["src/otf"]
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_source: true
+            docstring_section_style: table
+            docstring_style: "numpy"
+            merge_init_into_class: true
+            separate_signature: true
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            summary: true
