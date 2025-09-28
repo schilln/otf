@@ -27,6 +27,9 @@ dev = [
     "pytest>=8.4.2",
     "ruff>=0.13.0",
 ]
+lint-format = [
+    "ruff>=0.13.0",
+]
 profiling = [
     "tensorboard-plugin-profile>=2.20.6",
     "tensorflow>=2.20.0",

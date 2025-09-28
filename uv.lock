@@ -2268,6 +2268,9 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+lint-format = [
+    { name = "ruff" },
+]
 profiling = [
     { name = "tensorboard-plugin-profile" },
     { name = "tensorflow" },
@@ -2290,6 +2293,7 @@ dev = [
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "ruff", specifier = ">=0.13.0" },
 ]
+lint-format = [{ name = "ruff", specifier = ">=0.13.0" }]
 profiling = [
     { name = "tensorboard-plugin-profile", specifier = ">=2.20.6" },
     { name = "tensorflow", specifier = ">=2.20.0" },
