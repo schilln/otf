@@ -5,12 +5,12 @@ repos:
         name: ruff-lint
         entry: uv run ruff check --fix
         language: system
-        types: [python]
+        types_or: [python, jupyter]
       - id: ruff-format
         name: ruff-format
         entry: uv run ruff format
         language: system
-        types: [python]
+        types: [python, jupyter]
   - repo: https://github.com/srstevenson/nb-clean
     rev: 4.0.1
     hooks:
