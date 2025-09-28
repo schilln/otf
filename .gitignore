@@ -1,5 +1,5 @@
 # Jupyter Notebook
-.ipynb_checkpoints
+.ipynb_checkpoints/
 
 # Python-generated files
 __pycache__/
@@ -10,10 +10,10 @@ wheels/
 *.egg-info
 
 # Unit test / coverage reports
-.coverage
+.coverage/
 
 # Virtual environments
-.venv
+.venv/
 
 # VS Code
-*.vscode
+.vscode/
