@@ -32,6 +32,7 @@ def run_update(
     lr_scheduler: lr_scheduler.LRScheduler = lr_scheduler.DummyLRScheduler(),
     t_begin_updates: float | None = None,
     return_all: bool = False,
+    true_actual: jndarray | None = None,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
@@ -73,6 +74,10 @@ def run_update(
         Perform parameter updates after this time.
     return_all
         If true, return data assimilated states for entire simulation.
+    true_actual
+        Actual states of true system. If provided, used to compute error in
+        place of `true_observed`. Useful if `true_observed` contains noise.
+        shape (N, ...)
 
     Returns
     -------
@@ -149,10 +154,16 @@ def run_update(
     t0 = tls[-1]
     tf = t0 + t_relax
 
+    true_compare = (
+        true_actual[:, system.observed_slice]
+        if true_actual is not None
+        else true_observed
+    )
+
     # Relative error
     errors.append(
-        np.linalg.norm(true_observed[1:end] - assimilated[1:])
-        / np.linalg.norm(true_observed[1:end])
+        np.linalg.norm(true_compare[1:end] - assimilated[1:])
+        / np.linalg.norm(true_compare[1:end])
     )
 
     start = end - 1
@@ -185,8 +196,8 @@ def run_update(
 
         # Relative error
         errors.append(
-            np.linalg.norm(true_observed[start + 1 : end] - assimilated[k:])
-            / np.linalg.norm(true_observed[start + 1 : end])
+            np.linalg.norm(true_compare[start + 1 : end] - assimilated[k:])
+            / np.linalg.norm(true_compare[start + 1 : end])
         )
 
         start = end - 1
