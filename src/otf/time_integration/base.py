@@ -291,6 +291,7 @@ class SinglestepSolver(BaseSolver):
         tf: float,
         dt: float,
         true_observed: jndarray,
+        ensure_optimized: bool = True,
     ) -> tuple[jndarray, jndarray]:
         """See documentation for `BaseSolver`.
 
@@ -300,14 +301,23 @@ class SinglestepSolver(BaseSolver):
             Initial state of data assimilated system
         true_observed
             Observed true states
+        ensure_optimized
+            If True, check whether `true_observed` is the exact length for the
+            number of integration steps, raising a ValueError if `true_observed`
+            contains too many states. See Notes section.
 
-            When using the same time step `dt` with each call to this method,
-            for optimal performance the exact number of observed true states
-            required for the integration interval and step size should be given.
-            If additional trailing states are given, they will not be used, but
-            the benefits of jit compiling will not be reaped. (Each call to this
-            method uses the same jit-compiled loop of time integration steps as
-            long as the shape of the data passed in doesn't change.)
+        Notes
+        -----
+        For optimal performance the exact number of observed true states
+        required for the integration interval and step size should be passed to
+        `true_observed`. It seems performance of jit-compiling is improved when
+        at least one of the following conditions are met, but especially both:
+            1. arrays from which slices are taken are the same size; and
+            2. slices themselves are the same size.
+        Passing the exact number of observed true states helps this code meet
+        the first condition. This code meets the second condition when passing
+        arrays to the jit-compiled `step` functions used in time integration
+        solvers.
 
         Returns
         -------
@@ -320,12 +330,22 @@ class SinglestepSolver(BaseSolver):
 
         if len(true_observed) < len(assimilated):
             raise IndexError("too few `true_observed` states given")
+        if ensure_optimized:
+            if len(true_observed) > len(assimilated):
+                raise ValueError(
+                    "too many `true_observed` states given; either pass"
+                    " `ensure_optimized = False` or pass the exact number"
+                    " of `true_observed` states for the time interval"
+                )
 
         assimilated, _ = lax.fori_loop(
             1,
             len(assimilated),
             self._step_assimilated,
-            (assimilated, (dt, self.system.cs, true_observed)),
+            (
+                assimilated,
+                (dt, self.system.cs, true_observed[: len(assimilated)]),
+            ),
         )
 
         return assimilated, tls
@@ -518,6 +538,7 @@ class MultistepSolver(BaseSolver):
         tf: float,
         dt: float,
         true_observed: jndarray,
+        ensure_optimized: bool = True,
         start_with_multistep: bool = False,
     ) -> tuple[jndarray, jndarray]:
         """See documentation for `BaseSolver`.
@@ -540,17 +561,26 @@ class MultistepSolver(BaseSolver):
             `start_with_multistep` is True and this solver uses k = 2 steps,
             then `true_observed[0]` should correspond to t0 - dt and
             `true_observed[1]` should correspond to t0.
-
-            When using the same time step `dt` with each call to this method,
-            for optimal performance the exact number of observed true states
-            required for the integration interval and step size should be given.
-            If additional trailing states are given, they will not be used, but
-            the benefits of jit compiling will not be reaped. (Each call to this
-            method uses the same jit-compiled loop of time integration steps as
-            long as the shape of the data passed in doesn't change.)
+        ensure_optimized
+            If True, check whether `true_observed` is the exact length for the
+            number of integration steps, raising a ValueError if `true_observed`
+            contains too many states. See Notes section.
         start_with_multistep
             If true, use the first `self.k` states of `assimilated0` as initial
             states.
+
+        Notes
+        -----
+        For optimal performance the exact number of observed true states
+        required for the integration interval and step size should be passed to
+        `true_observed`. It seems performance of jit-compiling is improved when
+        at least one of the following conditions are met, but especially both:
+            1. arrays from which slices are taken are the same size; and
+            2. slices themselves are the same size.
+        Passing the exact number of observed true states helps this code meet
+        the first condition. This code meets the second condition when passing
+        arrays to the jit-compiled `step` functions used in time integration
+        solvers.
 
         Returns
         -------
@@ -566,6 +596,13 @@ class MultistepSolver(BaseSolver):
 
             if len(true_observed) < len(assimilated):
                 raise IndexError("too few `true_observed` states given")
+            if ensure_optimized:
+                if len(true_observed) > len(assimilated):
+                    raise ValueError(
+                        "too many `true_observed` states given; either pass"
+                        " `ensure_optimized = False` or pass the exact number"
+                        " of `true_observed` states for the time interval"
+                    )
 
             # Need k-1 previous steps to use k-step solver.
             # Note upper bound is exclusive, so the span is really
@@ -580,7 +617,10 @@ class MultistepSolver(BaseSolver):
                 self.k,
                 len(assimilated),
                 self._step_assimilated,
-                (assimilated, (dt, self.system.cs, true_observed)),
+                (
+                    assimilated,
+                    (dt, self.system.cs, true_observed[: len(assimilated)]),
+                ),
             )
 
             return assimilated, tls
@@ -599,6 +639,13 @@ class MultistepSolver(BaseSolver):
 
             if len(true_observed) < len(assimilated):
                 raise IndexError("too few `true_observed` states given")
+            if ensure_optimized:
+                if len(true_observed) > len(assimilated):
+                    raise ValueError(
+                        "too many `true_observed` states given; either pass"
+                        " `ensure_optimized = False` or pass the exact number"
+                        " of `true_observed` states for the time interval"
+                    )
 
             assimilated = assimilated.at[1 : self.k].set(assimilated0[1:])
 
@@ -606,7 +653,10 @@ class MultistepSolver(BaseSolver):
                 self.k,
                 len(assimilated),
                 self._step_assimilated,
-                (assimilated, (dt, self.system.cs, true_observed)),
+                (
+                    assimilated,
+                    (dt, self.system.cs, true_observed[: len(assimilated)]),
+                ),
             )
 
             return assimilated, tls
