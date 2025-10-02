@@ -78,6 +78,26 @@ class BaseOptimizer:
             The vector to add to `system.cs` to obtain the new parameters
         """
 
+    def step_from_gradient(
+        self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
+    ) -> jndarray:
+        """Compute the step to take to update the parameters of `system`.
+
+        Parameters
+        ----------
+        gradient
+            Derivative of error with respect to parameters
+        observed_true
+            The observed portion of the true system's state
+        nudged
+            The nudged system's state
+
+        Returns
+        -------
+        step
+            The vector to add to `system.cs` to obtain the new parameters
+        """
+
     def __call__(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         """Compute the new parameter values following one step of the
         optimization algorithm.

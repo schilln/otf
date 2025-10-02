@@ -4,7 +4,9 @@ returning the sequences of parameter values and data assimilated-vs-true errors.
 """
 
 from collections.abc import Callable
+from enum import Enum
 
+import jax
 import numpy as np
 from jax import numpy as jnp
 
@@ -15,6 +17,12 @@ from ..system import BaseSystem
 from ..time_integration import base as ti_base
 
 jndarray = jnp.ndarray
+
+
+class ParameterUpdateOption(Enum):
+    last_state = 0
+    mean_state = 1
+    mean_gradient = 2
 
 
 def run_update(
@@ -33,6 +41,7 @@ def run_update(
     t_begin_updates: float | None = None,
     return_all: bool = False,
     true_actual: jndarray | None = None,
+    parameter_update_option: ParameterUpdateOption = ParameterUpdateOption.last_state,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
@@ -131,6 +140,14 @@ def run_update(
     if return_all:
         assimilateds = [np.expand_dims(assimilated0, 0)]
 
+    match parameter_update_option:
+        case ParameterUpdateOption.last_state:
+            update = update_last_state
+        case ParameterUpdateOption.mean_state:
+            update = update_mean_state
+        case ParameterUpdateOption.mean_gradient:
+            update = update_mean_derivative
+
     t0 = T0
     tf = t0 + t_relax
 
@@ -147,10 +164,7 @@ def run_update(
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = optimizer(
-            true_observed[1:end].mean(axis=0),
-            assimilated[1:].mean(axis=0),
-        )
+        system.cs = update(optimizer, true_observed, assimilated, 0, end, 1)
         lr_scheduler.step()
     cs.append(system.cs)
 
@@ -190,9 +204,8 @@ def run_update(
 
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
-            system.cs = optimizer(
-                true_observed[start - k + 2 : end].mean(axis=0),
-                assimilated[1:].mean(axis=0),
+            system.cs = update(
+                optimizer, true_observed, assimilated, start, end, k
             )
             lr_scheduler.step()
         cs.append(system.cs)
@@ -219,3 +232,47 @@ def run_update(
         tls,
         np.concatenate(assimilateds) if return_all else assimilated,
     )
+
+
+def update_last_state(
+    optimizer: optim_base.BaseOptimizer,
+    true_observed: jndarray,
+    assimilated: jndarray,
+    start: int,
+    end: int,
+    k: int,
+) -> jndarray:
+    return optimizer(true_observed[end - 1], assimilated[-1])
+
+
+def update_mean_state(
+    optimizer: optim_base.BaseOptimizer,
+    true_observed: jndarray,
+    assimilated: jndarray,
+    start: int,
+    end: int,
+    k: int,
+) -> jndarray:
+    return optimizer(
+        true_observed[start - k + 2 : end].mean(axis=0),
+        assimilated[1:].mean(axis=0),
+    )
+
+
+def update_mean_derivative(
+    optimizer: optim_base.BaseOptimizer,
+    true_observed: jndarray,
+    assimilated: jndarray,
+    start: int,
+    end: int,
+    k: int,
+) -> jndarray:
+    mean_gradient = jax.vmap(optimizer.compute_gradient, 0)(
+        true_observed[start - k + 2 : end], assimilated[1:]
+    ).mean(axis=0)
+    step = optimizer.step_from_gradient(
+        mean_gradient,
+        true_observed[start - k + 2 : end].mean(axis=0),
+        assimilated[1:].mean(axis=0),
+    )
+    return optimizer.system.cs + jnp.real(step)
