@@ -147,7 +147,10 @@ def run_update(
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+        system.cs = optimizer(
+            true_observed[1:end].mean(axis=0),
+            assimilated[1:].mean(axis=0),
+        )
         lr_scheduler.step()
     cs.append(system.cs)
 
@@ -187,7 +190,10 @@ def run_update(
 
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
-            system.cs = optimizer(true_observed[end - 1], assimilated[-1])
+            system.cs = optimizer(
+                true_observed[start - k + 2 : end].mean(axis=0),
+                assimilated[1:].mean(axis=0),
+            )
             lr_scheduler.step()
         cs.append(system.cs)
 
