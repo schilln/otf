@@ -158,7 +158,7 @@ class BaseSolver:
             Number of steps used to integrate from `t0` to `tf` with steps of
             size `dt`
         """
-        return round((tf - t0) / dt)
+        return round((tf - t0) / dt) + 1
 
     # The following attribute is read-only.
     system = property(lambda self: self._system)
@@ -498,10 +498,10 @@ class MultistepSolver(BaseSolver):
             true, tls = self._init_solve(true0, t0, tf, dt)
 
             # Need k-1 previous steps to use k-step solver.
-            # Note upper bound is exclusive, so the span is really
-            # [t0, t0 + dt, ..., t0 + dt * (k-1)], for a total of k steps.
+            # The time span is [t0, t0 + dt, ..., t0 + dt * (k-1)],
+            # for a total of k steps.
             true0, _ = self._pre_multistep_solver.solve_true(
-                true0, t0, t0 + dt * self.k, dt
+                true0, t0, t0 + dt * (self.k - 1), dt
             )
 
             true = true.at[1 : self.k].set(true0[1:])
@@ -605,10 +605,14 @@ class MultistepSolver(BaseSolver):
                     )
 
             # Need k-1 previous steps to use k-step solver.
-            # Note upper bound is exclusive, so the span is really
-            # [t0, t0 + dt, ..., t0 + dt * (k-1)], for a total of k steps.
+            # The time span is [t0, t0 + dt, ..., t0 + dt * (k-1)],
+            # for a total of k steps.
             assimilated0, _ = self._pre_multistep_solver.solve_assimilated(
-                assimilated0, t0, t0 + dt * self.k, dt, true_observed[: self.k]
+                assimilated0,
+                t0,
+                t0 + dt * (self.k - 1),
+                dt,
+                true_observed[: self.k],
             )
 
             assimilated = assimilated.at[1 : self.k].set(assimilated0[1:])
@@ -674,10 +678,10 @@ class MultistepSolver(BaseSolver):
             self._pre_multistep_solver, MultistageSolver
         ):
             # Need k-1 previous steps to use k-step solver.
-            # Note upper bound is exclusive, so the span is really
-            # [t0, t0 + dt, ..., t0 + dt * (k-1)], for a total of k steps.
+            # The time span is [t0, t0 + dt, ..., t0 + dt * (k-1)],
+            # for a total of k steps.
             true0, assimilated0, _ = self._pre_multistep_solver.solve(
-                true0, assimilated0, t0, t0 + dt * self.k, dt
+                true0, assimilated0, t0, t0 + dt * (self.k - 1), dt
             )
 
             t0 = t0 + dt * (self.k - 1)
