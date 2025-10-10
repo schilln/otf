@@ -1,6 +1,7 @@
 arange
 argnames
 cmap
+colorbar
 figsize
 fori
 jndarray
