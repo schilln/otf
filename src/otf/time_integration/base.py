@@ -683,14 +683,16 @@ class MultistepSolver(BaseSolver):
             t0 = t0 + dt * (self.k - 1)
             start_with_multistep = True
 
-        true, tls = self.solve_true(true0, t0, tf, dt, start_with_multistep)
+        true, tls = self.solve_true(
+            true0, t0, tf, dt, start_with_multistep=start_with_multistep
+        )
         assimilated, _ = self.solve_assimilated(
             assimilated0,
             t0,
             tf,
             dt,
             true[:, self.system.observed_slice],
-            start_with_multistep,
+            start_with_multistep=start_with_multistep,
         )
 
         return true, assimilated, tls
