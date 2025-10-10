@@ -18,6 +18,20 @@ from .base import BaseOptimizer
 jndarray = jnp.ndarray
 
 
+class DummyOptimizer(BaseOptimizer):
+    def __init__(self, system: BaseSystem):
+        """Don't perform parameter updates."""
+        super().__init__(system)
+
+    def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
+        return jnp.zeros_like(self.system.cs)
+
+    def step_from_gradient(
+        self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
+    ) -> jndarray:
+        return jnp.zeros_like(self.system.cs)
+
+
 class GradientDescent(BaseOptimizer):
     def __init__(self, system: BaseSystem, learning_rate: float = 1e-4):
         """Perform gradient descent.
