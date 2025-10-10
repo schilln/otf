@@ -56,6 +56,13 @@ class BaseOptimizer:
         -------
         __call__
 
+        Attributes
+        ----------
+        system
+            Instance of `BaseSystem` to be optimized
+        weight
+            Matrix used to weight the error, or `None`
+
         Abstract Methods
         ----------------
         step
@@ -130,11 +137,36 @@ class BaseOptimizer:
         )
         w = self.system.compute_w(nudged)
         m = w.shape[0]
-        gradient = jnp.real(diff.conj() @ w.T.reshape(-1, m))
+        if self._weight is None:
+            gradient = jnp.real(diff.conj() @ w.T.reshape(-1, m))
+        else:
+            gradient = jnp.real(diff.conj() @ self._weight @ w.T.reshape(-1, m))
         return gradient
 
-    # The following attribute is read-only.
+    def set_weight(self, weight: jndarray | None):
+        """Weight the error using a (positive definite) matrix.
+
+        Use this matrix to weight the error (defined as the two-norm of the
+        difference between the data assimilated system state and the observed
+        portion of true system state). This accordingly weights the derivative
+        of the error with respect to the unknown parameters of the data
+        assimilated system.
+
+        If assimilating a system with noisy measurements, it is common to use
+        the *inverse* of the covariance matrix as the weight.
+
+        Parameters
+        ----------
+        weight
+            Square array. Each dimension should be equal to the number of
+            observed variables. Pass `None` to unset the weight (equivalently,
+            set the weight to the identity).
+        """
+        self._weight = weight
+
+    # The following attributes are read-only.
     system = property(lambda self: self._system)
+    weight = property(lambda self: self._weight)
 
 
 class PartialOptimizer(BaseOptimizer):

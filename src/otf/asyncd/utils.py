@@ -8,6 +8,7 @@ from enum import Enum
 
 import jax
 import numpy as np
+import scipy
 from jax import numpy as jnp
 
 from ..optim import base as optim_base
@@ -42,6 +43,7 @@ def run_update(
     return_all: bool = False,
     true_actual: jndarray | None = None,
     parameter_update_option: ParameterUpdateOption = ParameterUpdateOption.last_state,
+    weight: jndarray | None = None,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
@@ -87,6 +89,8 @@ def run_update(
         Actual states of true system. If provided, used to compute error in
         place of `true_observed`. Useful if `true_observed` contains noise.
         shape (N, ...)
+    weight
+        Weight the error using a (positive definite) matrix.
 
     Returns
     -------
@@ -148,6 +152,14 @@ def run_update(
         case ParameterUpdateOption.mean_gradient:
             update = update_mean_derivative
 
+    if weight is None:
+        norm = np.linalg.norm
+    if weight is not None:
+        sqrt_weight = scipy.linalg.sqrtm(weight)
+        norm = lambda states, *args, **kwargs: np.linalg.norm(
+            sqrt_weight @ states.T, *args, **kwargs
+        )
+
     t0 = T0
     tf = t0 + t_relax
 
@@ -179,8 +191,7 @@ def run_update(
 
     # Relative error
     errors.append(
-        np.linalg.norm(true_compare[1:end] - assimilated[1:])
-        / np.linalg.norm(true_compare[1:end])
+        norm(true_compare[1:end] - assimilated[1:]) / norm(true_compare[1:end])
     )
 
     start = end - 1
@@ -215,8 +226,8 @@ def run_update(
 
         # Relative error
         errors.append(
-            np.linalg.norm(true_compare[start + 1 : end] - assimilated[k:])
-            / np.linalg.norm(true_compare[start + 1 : end])
+            norm(true_compare[start + 1 : end] - assimilated[k:])
+            / norm(true_compare[start + 1 : end])
         )
 
         start = end - 1
