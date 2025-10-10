@@ -68,6 +68,7 @@ class BaseOptimizer:
         step
         """
         self._system = system
+        self._weight = None
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         """Compute the step to take to update the parameters of `system`.
