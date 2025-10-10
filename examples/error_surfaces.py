@@ -24,6 +24,7 @@ def get_errors(
     Tf: float,
     assimilated0: jndarray,
     cs_center: jndarray,
+    true_actual: jndarray | None = None,
     seed: int | None = 42,
 ) -> tuple[jndarray, ndarray, ndarray]:
     """
@@ -70,6 +71,7 @@ def get_errors(
             assimilated0,
             optimizer=optimizer,
             return_all=False,
+            true_actual=true_actual,
         )
 
         errors[yi, xi] = u_errors
