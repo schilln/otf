@@ -34,7 +34,11 @@ class GradientDescent(BaseOptimizer):
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         gradient = self.compute_gradient(observed_true, nudged)
+        return self.step_from_gradient(gradient, observed_true, nudged)
 
+    def step_from_gradient(
+        self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
+    ) -> jndarray:
         return -self.learning_rate * gradient
 
 
@@ -58,7 +62,11 @@ class WeightedLevenbergMarquardt(BaseOptimizer):
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         gradient = self.compute_gradient(observed_true, nudged)
+        return self.step_from_gradient(gradient, observed_true, nudged)
 
+    def step_from_gradient(
+        self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
+    ) -> jndarray:
         mat = jnp.outer(gradient, gradient)
 
         step = jnp.linalg.solve(
@@ -87,7 +95,11 @@ class LevenbergMarquardt(BaseOptimizer):
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         gradient = self.compute_gradient(observed_true, nudged)
+        return self.step_from_gradient(gradient, observed_true, nudged)
 
+    def step_from_gradient(
+        self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
+    ) -> jndarray:
         w = self.system.compute_w(nudged)
         m = w.shape[0]
         w_flat = w.reshape(m, -1)
@@ -120,6 +132,10 @@ class OptaxWrapper(BaseOptimizer):
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         gradient = self.compute_gradient(observed_true, nudged)
+        return self.step_from_gradient(gradient, observed_true, nudged)
 
+    def step_from_gradient(
+        self, gradient: jndarray, true_observed: jndarray, nudged: jndarray
+    ) -> jndarray:
         update, self.opt_state = self.optimizer.update(gradient, self.opt_state)
         return update
