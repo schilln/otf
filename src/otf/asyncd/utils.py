@@ -183,15 +183,21 @@ def run_update(
     t0 = tls[-1]
     tf = t0 + t_relax
 
-    true_compare = (
-        true_actual[:, system.observed_slice]
-        if true_actual is not None
-        else true_observed
-    )
+    if true_actual is not None:
+        true_compare = true_actual
+
+        def assimilated_compare(assimilated):
+            return assimilated
+    else:
+        true_compare = true_observed
+
+        def assimilated_compare(assimilated):
+            return assimilated[:, system.observed_slice]
 
     # Relative error
     errors.append(
-        norm(true_compare[1:end] - assimilated[1:]) / norm(true_compare[1:end])
+        norm(true_compare[1:end] - assimilated_compare(assimilated[1:]))
+        / norm(true_compare[1:end])
     )
 
     start = end - 1
@@ -226,7 +232,10 @@ def run_update(
 
         # Relative error
         errors.append(
-            norm(true_compare[start + 1 : end] - assimilated[k:])
+            norm(
+                true_compare[start + 1 : end]
+                - assimilated_compare(assimilated[k:])
+            )
             / norm(true_compare[start + 1 : end])
         )
 
