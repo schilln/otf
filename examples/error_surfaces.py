@@ -26,6 +26,8 @@ def get_errors(
     cs_center: jndarray,
     true_actual: jndarray | None = None,
     seed: int | None = 42,
+    xn: int = 11,
+    yn: int = 11,
 ) -> tuple[jndarray, ndarray, ndarray]:
     """
 
@@ -42,7 +44,6 @@ def get_errors(
     dirs /= np.linalg.norm(dirs, axis=1).reshape(-1, 1)
 
     # Set up grid of sizes of steps to take in random directions
-    xn = yn = 41
     xls = np.linspace(-1, 1, xn)
     yls = np.linspace(-1, 1, yn)
     x_steps, y_steps = np.meshgrid(xls, yls)
