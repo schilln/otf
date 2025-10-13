@@ -63,7 +63,11 @@ class BaseSystem:
         """
         self._mu = mu
         self._gs = gs
-        self._observed_slice = observed_slice
+        self._observed_slice = (
+            observed_slice
+            if isinstance(observed_slice, tuple)
+            else (observed_slice,)
+        )
         self._cs = cs
         self._assimilated_ode = assimilated_ode
 
