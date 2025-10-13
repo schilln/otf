@@ -192,7 +192,7 @@ def run_update(
         true_compare = true_observed
 
         def assimilated_compare(assimilated):
-            return assimilated[:, system.observed_slice]
+            return assimilated[(slice(None),) + system.observed_slice]
 
     # Relative error
     errors.append(

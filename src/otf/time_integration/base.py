@@ -364,7 +364,7 @@ class SinglestepSolver(BaseSolver):
             t0,
             tf,
             dt,
-            true[:, self.system.observed_slice],
+            true[(slice(None),) + self.system.observed_slice],
         )
 
         return true, assimilated, tls
@@ -695,7 +695,7 @@ class MultistepSolver(BaseSolver):
             t0,
             tf,
             dt,
-            true[:, self.system.observed_slice],
+            true[(slice(None),) + self.system.observed_slice],
             start_with_multistep=start_with_multistep,
         )
 
