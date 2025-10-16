@@ -1,6 +1,8 @@
 import matplotlib as mpl
 import numpy as np
 from jax import numpy as jnp
+from matplotlib.collections import LineCollection
+from matplotlib.colors import Normalize
 
 from otf import optim
 from otf.asyncd import utils
@@ -302,11 +304,24 @@ def plot_surface(
 
     cf = ax.contourf(xls, yls, errors, levels=levels, cmap=cmap)
 
-    colorbar = fig.colorbar(cf, ax=ax)
-    colorbar.set_label("Relative error")
+    fig.colorbar(cf, ax=ax, label="Relative error")
 
 
 def plot_trajectory(fig, ax, cs_coordinates: ndarray):
+    cmap = mpl.cm.magma
     xs, ys = cs_coordinates.T
-    ax.plot(xs, ys, color="red")
-    ax.scatter(xs[0], ys[0], color="darkred", alpha=0.8, s=100, zorder=2)
+
+    points = np.array([xs, ys]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    cls = np.arange(len(xs))
+    norm = Normalize(cls[0], cls[-1])
+
+    lc = LineCollection(
+        segments, cmap=cmap, norm=norm, linewidth=2, capstyle="round"
+    )
+    lc.set_array(cls)
+    ax.add_collection(lc)
+
+    ax.scatter(xs[0], ys[0], color="red", alpha=0.8, s=100, zorder=2)
+
+    fig.colorbar(lc, ax=ax, label="Parameter update step")
