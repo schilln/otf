@@ -28,8 +28,8 @@ def get_errors(
     seed: int | None = 42,
     xn: int = 11,
     yn: int = 11,
-    x_max_relative_step: float = 1,
-    y_max_relative_step: float = 1,
+    x_relative_bound: float = 1,
+    y_relative_bound: float = 1,
 ) -> tuple[jndarray, ndarray, ndarray]:
     """
 
@@ -40,11 +40,11 @@ def get_errors(
     xn, yn
         Number of grid points to simulate system on in respective direction,
         i.e., simulate on grid of shape (xn, yn)
-    x_max_relative_step, y_max_relative_step
+    x_relative_bound, y_relative_bound
         Maximum relative step size in each random direction
     """
-    x_max_relative_step = abs(x_max_relative_step)
-    y_max_relative_step = abs(y_max_relative_step)
+    x_relative_bound = abs(x_relative_bound)
+    y_relative_bound = abs(y_relative_bound)
 
     # Select random directions in parameter values, scaling standard deviation
     # by the size of the true parameter values. Then scale each direction vector
@@ -54,8 +54,8 @@ def get_errors(
     dirs /= np.linalg.norm(dirs, axis=1).reshape(-1, 1)
 
     # Set up grid of sizes of steps to take in random directions
-    xls = np.linspace(-x_max_relative_step, x_max_relative_step, xn)
-    yls = np.linspace(-y_max_relative_step, y_max_relative_step, yn)
+    xls = np.linspace(-x_relative_bound, x_relative_bound, xn)
+    yls = np.linspace(-y_relative_bound, y_relative_bound, yn)
     x_steps, y_steps = np.meshgrid(xls, yls)
     xis, yis = np.meshgrid(np.arange(xn), np.arange(yn))
 
