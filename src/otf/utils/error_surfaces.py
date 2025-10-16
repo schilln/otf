@@ -203,13 +203,11 @@ def get_trajectory(
         optimizer=optimizer,
         return_all=False,
     )
-    cs_coordinates = np.linalg.lstsq(dirs.T, (cs - cs_center).T)[0].T
-
-    return cs, cs_coordinates
+    return cs, get_relative_position_from_cs(cs_center, dirs, cs)
 
 
 def get_cs_from_relative_position(
-    cs_center: jndarray,
+    cs_center: ndarray,
     dirs: ndarray,
     relative_position: tuple[float, float] | ndarray,
 ) -> ndarray:
@@ -242,6 +240,59 @@ def get_cs_from_relative_position(
         raise ValueError("`relative_position` should have shape (2,)")
 
     return cs_center + relative_position @ dirs
+
+
+def get_relative_position_from_cs(
+    cs_center: ndarray,
+    dirs: ndarray,
+    cs: ndarray,
+) -> ndarray:
+    """Get position relative to `cs_center` and `dirs`.
+
+    Parameters
+    ----------
+    cs_center
+        Parameter values to use as center for grid of simulations
+
+        shape (m,) where m is number of parameters
+    dirs
+        Direction vectors defining domain for computing error surface
+
+        shape (2, m) where m is number of parameters
+    cs
+        Parameter values
+
+        shape (N, m) where N is number of iterations and m is number of
+        parameters
+
+    Returns
+    -------
+    cs_coordinates
+        Coordinates in `(dirs[0], dirs[1])` basis with `cs_center` as the origin
+
+        shape (N, 2) where N is number of iterations and m is number of
+        parameters
+    """
+    if cs_center.ndim != 1:
+        raise ValueError("`cs_center` should be one-dimensional")
+
+    m = cs_center.shape[0]
+    if dirs.ndim != 2 or dirs.shape != (2, m):
+        raise ValueError("`dirs` must have shape (2, m)")
+
+    if cs.ndim > 2:
+        raise ValueError("`cs.ndim` is greater than two")
+
+    if cs.ndim == 1:
+        cs = np.expand_dims(cs, 0)
+
+    cs_coordinates = np.linalg.lstsq(dirs.T, (cs - cs_center).T)[0].T
+
+    return (
+        cs_coordinates.squeeze(0)
+        if cs_coordinates.shape[0] == 1
+        else cs_coordinates
+    )
 
 
 def plot_surface(
