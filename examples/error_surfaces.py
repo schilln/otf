@@ -183,9 +183,11 @@ def get_errors(
     }
 
 
-def plot(fig, ax, errors: jndarray, xls: ndarray, yls: ndarray):
+def plot(
+    fig, ax, errors: jndarray, xls: ndarray, yls: ndarray, levels: int = 20
+):
     cmap = mpl.cm.viridis
-    cf = ax.contourf(xls, yls, errors[:, :, -1], levels=20, cmap=cmap)
+    cf = ax.contourf(xls, yls, errors[:, :, -1], levels=levels, cmap=cmap)
 
     colorbar = fig.colorbar(cf, ax=ax)
     colorbar.set_label("Relative error")
