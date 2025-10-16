@@ -258,4 +258,4 @@ def plot_surface(
 def plot_trajectory(fig, ax, cs_coordinates: ndarray):
     xs, ys = cs_coordinates.T
     ax.plot(xs, ys, color="red")
-    ax.scatter(xs[0], ys[0], color="red")
+    ax.scatter(xs[0], ys[0], color="darkred", alpha=0.8, s=100, zorder=2)
