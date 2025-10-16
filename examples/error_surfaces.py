@@ -1,4 +1,3 @@
-import jax
 import matplotlib as mpl
 import numpy as np
 from jax import numpy as jnp
@@ -8,14 +7,63 @@ from otf.asyncd import utils
 from otf.system import base as system_base
 from otf.time_integration import base as ti_base
 
-jax.config.update("jax_platform_name", "cpu")
-jax.config.update("jax_enable_x64", True)
-
 jndarray = jnp.ndarray
 ndarray = np.ndarray
 
 
-def get_errors(
+def get_dirs(
+    mean: ndarray,
+    standard_deviation: ndarray | None = None,
+    seed: int | None = None,
+) -> ndarray:
+    """Select random directions in parameter values.
+
+    Select directions from normal distribution with given mean and standard
+    deviation, then scale each direction vector to have unit length.
+
+    If no standard deviation is given, use the absolute values of `mean` so that
+    samples tend to differ from the mean by the same relative amounts.
+
+    Parameters
+    ----------
+    mean
+        Mean of normal distribution from which to sample directions
+
+        shape (m,) where m is number of parameters
+    standard_deviation
+        Standard deviation of normal distribution from which to sample
+        directions. If None, will default to the absolute values of `mean` or to
+        one anywhere `mean` is zero.
+
+        shape (m,) where m is number of parameters
+    seed
+        Seed with which to initialize random number generator. If None, no fixed
+        seed will be used, so results will vary from call to call.
+
+    Returns
+    -------
+    dirs
+        Direction vectors which may be used to define domain on which to compute
+        and plot error surface
+
+        shape (2, m) where m is number of parameters
+    """
+    if standard_deviation is None:
+        standard_deviation = abs(mean)
+        standard_deviation = np.where(
+            standard_deviation == 0, 1, standard_deviation
+        )
+    elif mean.shape != standard_deviation.shape:
+        raise ValueError("`mean` and `standard_deviation` must have same shape")
+
+    rng = np.random.default_rng(seed)
+    dirs = rng.normal(scale=standard_deviation, size=(2, *mean.shape))
+    dirs /= np.linalg.norm(dirs, axis=1).reshape(-1, 1)
+
+    return dirs
+
+
+def get_surface(
     system: system_base.System_ModelKnown,
     true_observed: jndarray,
     assimilated_solver: ti_base.SinglestepSolver | ti_base.MultistepSolver,
@@ -24,97 +72,52 @@ def get_errors(
     Tf: float,
     assimilated0: jndarray,
     cs_center: jndarray,
+    dirs: ndarray,
     true_actual: jndarray | None = None,
-    seed: int | None = 42,
     xn: int = 11,
     yn: int = 11,
     x_relative_bound: float = 1,
     y_relative_bound: float = 1,
-    start_relative_position: tuple[int, int] | None = None,
-    optimizer_type: type[optim.base.BaseOptimizer] | None = None,
-    optimizer_kwargs: dict = dict(),
-    sim_T0: float | None = 0,
-    sim_Tf: float | None = None,
-    sim_t_relax: float | None = 1,
-) -> dict:
-    """Compute an error surface. Optionally compute a trajectory of parameter
-    updates along the surface if `start_relative_position` is not None.
+) -> tuple[ndarray, ndarray, ndarray]:
+    """Compute an error surface.
 
     Parameters
     ----------
     cs_center
         Parameter values to use as center for grid of simulations
+
+        shape (m,) where m is number of parameters
+    dirs
+        Direction vectors defining domain for computing error surface
+
+        shape (2, m) where m is number of parameters
     xn, yn
         Number of grid points to simulate system on in respective direction,
         i.e., simulate on grid of shape (xn, yn)
     x_relative_bound, y_relative_bound
         Maximum relative step size in each random direction
-    start_relative_position
-        If not None, used to compute starting parameter values from the error
-        surface domain relative to (`x_relative_bound`, `y_relative_bound`),
-        then simulate a system using `true_observed` and `optimizer` to update
-        parameters. Include the sequence of coordinates of the updated
-        parameters in the returned `(xls, yls)` domain.
-    optimizer_type
-        Optimizer type to use to update parameters if `start_relative_position`
-        is not None.
-    optimizer_options
-        Keyword arguments with which to initialize `optimizer_type`
-    sim_T0
-        Initial time at which to begin simulation if `start_relative_position`
-        is not None
-    sim_Tf
-        (Approximate) final time for simulation if `start_relative_position` is
-        not None
-    sim_t_relax
-        (Approximate) length of time to simulate system between parameter
-        updates if `start_relative_position` is not None
 
     Returns
     -------
-    result
-        Dictionary containing the following keys:
+    errors
+        Grid of relative errors, shape (yn, xn)
+    xls, yls
+        Grid of coordinates relative to `dirs`, shapes (xn,) and (yn,)
 
-        - **errors** (*jndarray*) - Grid of relative errors, shape (yn, xn,
-          len(true_observed))
-        - **xls** (*ndarray*) - x-coordinates of grid, shape (xn,)
-        - **yls** (*ndarray*) - y-coordinates of grid, shape (yn,)
-        - **cs** (*ndarray*, optional) - Sequence of parameter values during
-          optimization. Only present if `start_relative_position` is not None.
-        - **cs_coordinates** (*ndarray*, optional) - Sequence of positions of
-          `cs` values in `(xls, yls)` domain using updates provided by
-          `optimizer`, shape (N, 2) where N is number of iterations. Only
-          present if `start_relative_position` is not None.
+    Notes
+    -----
+    This calls `utils.run_update(..., t_relax=Tf)` to effectively disable
+    parameter updates while computing the surface.
     """
-    if start_relative_position is not None:
-        if optimizer_type is None:
-            raise ValueError(
-                "`optimizer` must be provided if `start_relative_position`"
-                " is not None"
-            )
-        if len(start_relative_position) != 2:
-            raise ValueError(
-                "`start_relative_position` must contain two elements"
-            )
-        for item in start_relative_position:
-            if not isinstance(item, (int, float)):
-                raise ValueError(
-                    "elements of `start_relative_position` must be numbers"
-                )
-        if not isinstance(sim_T0, (int, float)) or not isinstance(
-            sim_Tf, (int, float)
-        ):
-            raise ValueError("`sim_T0` and `sim_Tf` must be numbers")
+    if cs_center.ndim != 1:
+        raise ValueError("`cs_center` should be one-dimensional")
+
+    m = cs_center.shape[0]
+    if dirs.ndim != 2 or dirs.shape != (2, m):
+        raise ValueError("`dirs` must have shape (2, m)")
 
     x_relative_bound = abs(x_relative_bound)
     y_relative_bound = abs(y_relative_bound)
-
-    # Select random directions in parameter values, scaling standard deviation
-    # by the size of the true parameter values. Then scale each direction vector
-    # to have unit length.
-    rng = np.random.default_rng(seed)
-    dirs = rng.normal(scale=cs_center, size=(2, *cs_center.shape))
-    dirs /= np.linalg.norm(dirs, axis=1).reshape(-1, 1)
 
     # Set up grid of sizes of steps to take in random directions
     xls = np.linspace(-x_relative_bound, x_relative_bound, xn)
@@ -122,77 +125,137 @@ def get_errors(
     x_steps, y_steps = np.meshgrid(xls, yls)
     xis, yis = np.meshgrid(np.arange(xn), np.arange(yn))
 
-    # Simulate on grid of parameter values
-    errors = np.full((yn, xn, len(true_observed)), np.inf)
-    for x_step, y_step, xi, yi in zip(
-        *map(np.ravel, (x_steps, y_steps, xis, yis))
-    ):
-        system.cs = cs_center + x_step * dirs[0] + y_step * dirs[1]
+    if system.cs is not None:
+        original_cs = system.cs.copy()
+    else:
+        original_cs = None
+    try:
+        # Simulate on grid of parameter values
+        errors = np.full((yn, xn), np.inf)
+        for x_step, y_step, xi, yi in zip(
+            *map(np.ravel, (x_steps, y_steps, xis, yis))
+        ):
+            step = (x_step, y_step)
+            system.cs = get_cs_from_relative_position(cs_center, dirs, step)
 
-        # Re-initializing the optimizer is necessary when the particular
-        # optimizer maintains internal state (such as Adam).
-        tmp_optimizer = optim.optimizer.DummyOptimizer(system)
+            # Re-initializing the optimizer is necessary when the particular
+            # optimizer maintains internal state (such as Adam).
+            tmp_optimizer = optim.optimizer.DummyOptimizer(system)
 
-        _, u_errors, *_ = utils.run_update(
-            system,
-            true_observed,
-            assimilated_solver,
-            dt,
-            T0,
-            Tf,
-            Tf,
-            assimilated0,
-            optimizer=tmp_optimizer,
-            return_all=False,
-            true_actual=true_actual,
-        )
+            _, u_error, *_ = utils.run_update(
+                system,
+                true_observed,
+                assimilated_solver,
+                dt,
+                T0,
+                Tf,
+                Tf,
+                assimilated0,
+                optimizer=tmp_optimizer,
+                return_all=False,
+                true_actual=true_actual,
+            )
+            errors[yi, xi] = u_error
+    finally:
+        system.cs = original_cs
 
-        errors[yi, xi] = u_errors
+    return errors, xls, yls
 
-    if start_relative_position is None:
-        return {"errors": errors, "xls": xls, "yls": yls}
 
-    system.cs = (
-        cs_center
-        + start_relative_position[0] * dirs[0]
-        + start_relative_position[1] * dirs[1]
-    )
+def get_trajectory(
+    system: system_base.System_ModelKnown,
+    true_observed: jndarray,
+    assimilated_solver: ti_base.SinglestepSolver | ti_base.MultistepSolver,
+    dt: float,
+    T0: float,
+    Tf: float,
+    t_relax: float,
+    assimilated0: jndarray,
+    optimizer: optim.base.BaseOptimizer,
+    cs_center: jndarray,
+    dirs: ndarray,
+) -> tuple[ndarray, ndarray]:
+    """Compute sequence of parameter values relative to `dirs` during one
+    simulation of system with updates provided by `optimizer`.
 
-    optimizer = optimizer_type(system, **optimizer_kwargs)
+    Returns
+    -------
+    cs
+        The sequence of parameter values
+
+        shape (N + 1, d) where d is the number of parameters being estimated and
+        N is the number of parameter updates performed (the first row is the
+        initial set of parameter values).
+    cs_coordinates
+        Sequence of positions of `cs` values relative to `dirs`
+
+        shape (N + 1, 2) where N is number of iterations
+    """
     cs, *_ = utils.run_update(
         system,
         true_observed,
         assimilated_solver,
         dt,
-        sim_T0,
-        sim_Tf,
-        sim_t_relax,
+        T0,
+        Tf,
+        t_relax,
         assimilated0,
         optimizer=optimizer,
         return_all=False,
-        true_actual=true_actual,
     )
     cs_coordinates = np.linalg.lstsq(dirs.T, (cs - cs_center).T)[0].T
 
-    return {
-        "errors": errors,
-        "xls": xls,
-        "yls": yls,
-        "cs": cs,
-        "cs_coordinates": cs_coordinates,
-    }
+    return cs, cs_coordinates
 
 
-def plot(fig, ax, result: dict, levels: int = 20):
+def get_cs_from_relative_position(
+    cs_center: jndarray,
+    dirs: ndarray,
+    relative_position: tuple[float, float] | ndarray,
+) -> ndarray:
+    """Get actual parameter values relative to `cs_center` and `dirs`.
+
+    Parameters
+    ----------
+    cs_center
+        Parameter values to use as center for grid of simulations
+
+        shape (m,) where m is number of parameters
+    dirs
+        Direction vectors defining domain for computing error surface
+
+        shape (2, m) where m is number of parameters
+    relative_position
+        Pair of coordinates in `(dirs[0], dirs[1])` basis with `cs_center` as
+        the origin
+
+    Returns
+    -------
+    cs
+        Parameter values
+
+        shape (m,) where m is number of parameters
+    """
+    if not isinstance(relative_position, ndarray):
+        relative_position = np.array(relative_position)
+    if relative_position.shape != (2,):
+        raise ValueError("`relative_position` should have shape (2,)")
+
+    return cs_center + relative_position @ dirs
+
+
+def plot_surface(
+    fig, ax, errors: ndarray, xls: ndarray, yls: ndarray, levels: int = 20
+):
     cmap = mpl.cm.viridis
 
-    errors = result["errors"]
-    xls, yls = result["xls"], result["yls"]
-    cf = ax.contourf(xls, yls, errors[:, :, -1], levels=levels, cmap=cmap)
-
-    xs, ys = result["cs_coordinates"].T
-    ax.plot(xs, ys, color="red")
-    ax.scatter(xs[0], ys[0], color="red")
+    cf = ax.contourf(xls, yls, errors, levels=levels, cmap=cmap)
 
     colorbar = fig.colorbar(cf, ax=ax)
     colorbar.set_label("Relative error")
+
+
+def plot_trajectory(fig, ax, cs_coordinates: ndarray):
+    xs, ys = cs_coordinates.T
+    ax.plot(xs, ys, color="red")
+    ax.scatter(xs[0], ys[0], color="red")
