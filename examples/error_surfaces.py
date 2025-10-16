@@ -69,7 +69,7 @@ def get_errors(
 
         # Re-initializing the optimizer is necessary when the particular
         # optimizer maintains internal state (such as Adam).
-        optimizer = optim.optimizer.DummyOptimizer(system)
+        tmp_optimizer = optim.optimizer.DummyOptimizer(system)
 
         _, u_errors, *_ = utils.run_update(
             system,
@@ -80,7 +80,7 @@ def get_errors(
             Tf,
             Tf,
             assimilated0,
-            optimizer=optimizer,
+            optimizer=tmp_optimizer,
             return_all=False,
             true_actual=true_actual,
         )
