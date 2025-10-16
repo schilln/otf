@@ -28,6 +28,8 @@ def get_errors(
     seed: int | None = 42,
     xn: int = 11,
     yn: int = 11,
+    x_max_relative_step: float = 1,
+    y_max_relative_step: float = 1,
 ) -> tuple[jndarray, ndarray, ndarray]:
     """
 
@@ -35,7 +37,15 @@ def get_errors(
     ----------
     cs_center
         Parameter values to use as center for grid of simulations
+    xn, yn
+        Number of grid points to simulate system on in respective direction,
+        i.e., simulate on grid of shape (xn, yn)
+    x_max_relative_step, y_max_relative_step
+        Maximum relative step size in each random direction
     """
+    x_max_relative_step = abs(x_max_relative_step)
+    y_max_relative_step = abs(y_max_relative_step)
+
     # Select random directions in parameter values, scaling standard deviation
     # by the size of the true parameter values. Then scale each direction vector
     # to have unit length.
@@ -44,8 +54,8 @@ def get_errors(
     dirs /= np.linalg.norm(dirs, axis=1).reshape(-1, 1)
 
     # Set up grid of sizes of steps to take in random directions
-    xls = np.linspace(-1, 1, xn)
-    yls = np.linspace(-1, 1, yn)
+    xls = np.linspace(-x_max_relative_step, x_max_relative_step, xn)
+    yls = np.linspace(-y_max_relative_step, y_max_relative_step, yn)
     x_steps, y_steps = np.meshgrid(xls, yls)
     xis, yis = np.meshgrid(np.arange(xn), np.arange(yn))
 
