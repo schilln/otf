@@ -64,8 +64,7 @@ def get_errors(
     for x_step, y_step, xi, yi in zip(
         *map(np.ravel, (x_steps, y_steps, xis, yis))
     ):
-        cs = cs_center + x_step * dirs[0] + y_step * dirs[1]
-        system._set_cs(cs)
+        system.cs = cs_center + x_step * dirs[0] + y_step * dirs[1]
 
         # Re-initializing the optimizer is necessary when the particular
         # optimizer maintains internal state (such as Adam).
