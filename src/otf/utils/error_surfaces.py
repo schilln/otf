@@ -176,6 +176,7 @@ def get_trajectory(
     optimizer: optim.base.BaseOptimizer,
     cs_center: jndarray,
     dirs: ndarray,
+    run_update_options: dict = dict(),
 ) -> tuple[ndarray, ndarray]:
     """Compute sequence of parameter values relative to `dirs` during one
     simulation of system with updates provided by `optimizer`.
@@ -204,6 +205,7 @@ def get_trajectory(
         assimilated0,
         optimizer=optimizer,
         return_all=False,
+        **run_update_options,
     )
     return cs, get_relative_position_from_cs(cs_center, dirs, cs)
 
