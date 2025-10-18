@@ -2,7 +2,6 @@ import matplotlib as mpl
 import numpy as np
 from jax import numpy as jnp
 from matplotlib.collections import LineCollection
-from matplotlib.colors import Normalize
 
 from otf import optim
 from otf.asyncd import utils
@@ -320,7 +319,7 @@ def plot_trajectory(fig, ax, cs_coordinates: ndarray):
     points = np.array([xs, ys]).T.reshape(-1, 1, 2)
     segments = np.concatenate([points[:-1], points[1:]], axis=1)
     cls = np.arange(len(xs))
-    norm = Normalize(cls[0], cls[-1])
+    norm = mpl.colors.Normalize(cls[0], cls[-1])
 
     lc = LineCollection(
         segments, cmap=cmap, norm=norm, linewidth=2, capstyle="round"
