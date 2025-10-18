@@ -78,8 +78,8 @@ def get_surface(
     true_actual: jndarray | None = None,
     xn: int = 11,
     yn: int = 11,
-    x_relative_bound: float = 1,
-    y_relative_bound: float = 1,
+    x_relative_bound: float | tuple[float, float] = 1,
+    y_relative_bound: float | tuple[float, float] = 1,
 ) -> tuple[ndarray, ndarray, ndarray]:
     """Compute an error surface.
 
@@ -118,12 +118,16 @@ def get_surface(
     if dirs.ndim != 2 or dirs.shape != (2, m):
         raise ValueError("`dirs` must have shape (2, m)")
 
-    x_relative_bound = abs(x_relative_bound)
-    y_relative_bound = abs(y_relative_bound)
+    if isinstance(x_relative_bound, float | int):
+        x_relative_bound = abs(x_relative_bound)
+        x_relative_bound = (-x_relative_bound, x_relative_bound)
+    if isinstance(y_relative_bound, float | int):
+        y_relative_bound = abs(y_relative_bound)
+        y_relative_bound = (-y_relative_bound, y_relative_bound)
 
     # Set up grid of sizes of steps to take in random directions
-    xls = np.linspace(-x_relative_bound, x_relative_bound, xn)
-    yls = np.linspace(-y_relative_bound, y_relative_bound, yn)
+    xls = np.linspace(*x_relative_bound, xn)
+    yls = np.linspace(*y_relative_bound, yn)
     x_steps, y_steps = np.meshgrid(xls, yls)
     xis, yis = np.meshgrid(np.arange(xn), np.arange(yn))
 
