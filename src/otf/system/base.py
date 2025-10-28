@@ -129,7 +129,7 @@ class BaseSystem:
 
     @partial(jax.jit, static_argnames="self")
     def _compute_w(self, cs: jndarray, assimilated: jndarray) -> jndarray:
-        return (
+        result = (
             jax.jacrev(
                 self._assimilated_ode,
                 0,
@@ -137,6 +137,12 @@ class BaseSystem:
             )(cs, assimilated)[self.observed_slice].T
             / self.mu
         )
+        *_, beta = cs
+        x, _, z = assimilated
+        result = result.at[2, 1].set(x * z / beta) / self.mu
+        # jax.debug.print("{result}", result=result)
+        # jax.debug.breakpoint()
+        return result
 
     def _set_cs(self, cs):
         self._cs = cs
