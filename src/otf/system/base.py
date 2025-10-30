@@ -12,6 +12,59 @@ from jax import numpy as jnp
 
 jndarray = jnp.ndarray
 
+"""
+By using slice objects, I already require that the slice be
+contiguous. I think the easiest thing would be to require that the
+state arrays also be one-dimensional (which can be accomplished for
+something like Lorenz '96 via reshape and/or ravel). This would
+simplify/make possible using the unobserved portion of the state, and
+add only a slight amount of overhead to defining systems.
+Or... perhaps the best idea would be to allow slices (and masks) as I
+am now (masks should just get jit compiled and be equally fast) but
+then if the states aren't flat, then wrap the ODE functions to accept
+flattened states and also store a flattened version of the slice/mask
+to use when computing unobserved stuff.
+"""
+
+"""
+I want to allow ODE definitions using arbitrary (non-ragged) shapes. I want to
+allow observed slices or masks.
+
+So when self.assimilated_ode is run for the first time, it needs to redefine
+itself to
+    1. expect a flattened state
+    2. reshape the state and pass it into the actual assimilated_ode function
+    3. return the flattened the output derivative
+Same for self.true_ode. We'll need to compute a separate mask object for the
+flattened version of the state. Then we can invert this mask to compute the Qw^0
+term in compute_w. Perhaps another mask object for true since true and
+assimilated may not even share the same model or state dimension. The only
+requirement is that their observed portions be comparable in terms of dimension.
+
+Then self.f_assimilated and self.f_true need to accept shaped inputs (they are
+public methods) and then use assimilated_ode and true_observed appropriately,
+i.e., reshaping the outputs of assimilated_ode to match.
+"""
+
+"""
+Game plan
+
+__init__
+    1. Set self._shaped_assimilated_ode = assimilated_ode.
+    2. Define self._assimilated_ode as a function that on the first run
+        a. Stores the shape of the passed-in state in self._assimilated_shape.
+        b. Compute the observed and unobserved mask of the flattened version
+            of the state using the provided slice/mask.
+        c. Redefines itself to
+            1. Take a flattened state (this will make autodiff nice)
+            2. Reshape the flat input to self._assimilated_shape.
+            3. Pass this through self._shaped_assimilated_ode
+            4. Flatten the output and return.
+        d. Actually runs itself.
+    3. Redefine self.f_assimilated to still accept shaped inputs but flatten
+        them to pass into self._assimilated_ode.
+"""
+
 
 class BaseSystem:
     """A base class for defining systems of differential equations and to which
@@ -129,14 +182,16 @@ class BaseSystem:
 
     @partial(jax.jit, static_argnames="self")
     def _compute_w(self, cs: jndarray, assimilated: jndarray) -> jndarray:
-        return (
-            jax.jacrev(
-                self._assimilated_ode,
-                0,
-                holomorphic=self.complex_differentiation,
-            )(cs, assimilated)[self.observed_slice].T
-            / self.mu
-        )
+        dFdc = jax.jacrev(
+            self._assimilated_ode,
+            0,
+            holomorphic=self.complex_differentiation,
+        )(cs, assimilated)
+        jax.debug.print("{val}", val=dFdc)
+        # jax.debug.breakpoint()
+        # jax.debug.print("{val}", val=dFdc[self.observed_slice])
+        # jax.debug.print("{val}", val=dFdc[self.observed_slice].T)
+        return dFdc[self.observed_slice].T
 
     def _set_cs(self, cs):
         self._cs = cs
