@@ -31,7 +31,7 @@ def flatten_ode(
     return flat_ode
 
 
-def flatten_slice(
+def mask_from_slice(
     slice_obj: slice | tuple[slice | int, ...],
     shape: tuple[int, ...],
 ) -> jndarray:
