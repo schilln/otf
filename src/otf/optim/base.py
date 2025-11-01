@@ -135,11 +135,11 @@ class BaseOptimizer:
         """
         diff = nudged[self.system.observed_mask] - observed_true
         w = self.system.compute_w(nudged)
-        m = w.shape[0]
+        m = w.shape[1]
         if self._weight is None:
-            gradient = jnp.real(diff.conj() @ w.T.reshape(-1, m))
+            gradient = jnp.real(diff.conj() @ w.reshape(-1, m))
         else:
-            gradient = jnp.real(diff.conj() @ self._weight @ w.T.reshape(-1, m))
+            gradient = jnp.real(diff.conj() @ self._weight @ w.reshape(-1, m))
         return gradient
 
     def set_weight(self, weight: jndarray | None):

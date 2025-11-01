@@ -121,8 +121,9 @@ class BaseSystem:
         Returns
         -------
         W
-            The ith row corresponds to the asymptotic approximation of the ith
-            sensitivity corresponding to the ith unknown parameter ci
+            The ith column corresponds to the asymptotic approximation of the
+            ith sensitivity (i.e., w_i = dv/dc_i corresponding to the ith
+            unknown parameter c_i)
         """
         return self._compute_w(self.cs, assimilated)
 
@@ -133,7 +134,7 @@ class BaseSystem:
                 self._assimilated_ode,
                 0,
                 holomorphic=self.complex_differentiation,
-            )(cs, assimilated)[self.observed_mask].T
+            )(cs, assimilated)[self.observed_mask]
             / self.mu
         )
 
