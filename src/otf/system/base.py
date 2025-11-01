@@ -59,6 +59,11 @@ class BaseSystem:
             equations.
             May be overridden (see docstring).
         """
+        if not isinstance(observed_mask, jndarray):
+            raise ValueError(
+                "`observed_mask` must be jnp.ndarray boolean array"
+            )
+
         self._mu = mu
         self._gs = gs
         self._observed_mask = observed_mask
