@@ -23,7 +23,7 @@ class BaseSystem:
         mu: float,
         gs: jndarray,
         cs: jndarray,
-        observed_slice: slice,
+        observed_mask: jndarray,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
     ):
@@ -38,11 +38,9 @@ class BaseSystem:
         cs
             Estimated parameter values to be used by the data assimilate system,
             to be estimated/optimized (may or may not correspond to `gs`)
-        observed_slice
-            The slice denoting the observed part of the true and data
-            assimilated system states when nudging in `f_assimilated`. May use
-            `jnp.s_` to define slice to use. To observed the entire system, use
-            `jnp.s_[:]`.
+        observed_mask
+            Boolean mask denoting the observed part of the true and data
+            assimilated system states when nudging in `f_assimilated`.
         assimilated_ode
             Function that computes the time derivative of the data assimilated
             state using the current estimated parameters `cs`.
@@ -63,11 +61,7 @@ class BaseSystem:
         """
         self._mu = mu
         self._gs = gs
-        self._observed_slice = (
-            observed_slice
-            if isinstance(observed_slice, tuple)
-            else (observed_slice,)
-        )
+        self._observed_mask = observed_mask
         self._cs = cs
         self._assimilated_ode = assimilated_ode
 
@@ -99,11 +93,11 @@ class BaseSystem:
         assimilated_p
             The time derivative of `assimilated_p`
         """
-        s = self.observed_slice
+        mask = self.observed_mask
 
         assimilated_p = self._assimilated_ode(cs, assimilated)
-        assimilated_p = assimilated_p.at[s].subtract(
-            self.mu * (assimilated[s] - true_observed)
+        assimilated_p = assimilated_p.at[mask].subtract(
+            self.mu * (assimilated[mask] - true_observed)
         )
 
         return assimilated_p
@@ -134,7 +128,7 @@ class BaseSystem:
                 self._assimilated_ode,
                 0,
                 holomorphic=self.complex_differentiation,
-            )(cs, assimilated)[self.observed_slice].T
+            )(cs, assimilated)[self.observed_mask].T
             / self.mu
         )
 
@@ -145,7 +139,7 @@ class BaseSystem:
     mu = property(lambda self: self._mu)
     gs = property(lambda self: self._gs)
     cs = property(lambda self: self._cs, _set_cs)
-    observed_slice = property(lambda self: self._observed_slice)
+    observed_mask = property(lambda self: self._observed_mask)
     complex_differentiation = property(
         lambda self: self._complex_differentiation
     )
@@ -169,7 +163,7 @@ class System_ModelKnown(BaseSystem):
         mu: float,
         gs: jndarray,
         cs: jndarray,
-        observed_slice: slice,
+        observed_mask: jndarray,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         true_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
@@ -188,7 +182,7 @@ class System_ModelKnown(BaseSystem):
             mu,
             gs,
             cs,
-            observed_slice,
+            observed_mask,
             assimilated_ode,
             complex_differentiation,
         )

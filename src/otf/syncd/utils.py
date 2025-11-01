@@ -183,7 +183,7 @@ def _run_update_not_multistep(
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
             system.cs = optimizer(
-                true[-1][system.observed_slice], assimilated[-1]
+                true[-1][system.observed_mask], assimilated[-1]
             )
             lr_scheduler.step()
         cs.append(system.cs)
@@ -262,7 +262,7 @@ def _run_update_multistep(
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = optimizer(true[-1][system.observed_slice], assimilated[-1])
+        system.cs = optimizer(true[-1][system.observed_mask], assimilated[-1])
         lr_scheduler.step()
     cs.append(system.cs)
 
@@ -289,7 +289,7 @@ def _run_update_multistep(
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
             system.cs = optimizer(
-                true[-1][system.observed_slice], assimilated[-1]
+                true[-1][system.observed_mask], assimilated[-1]
             )
             lr_scheduler.step()
         cs.append(system.cs)
