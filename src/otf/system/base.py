@@ -67,6 +67,7 @@ class BaseSystem:
         self._mu = mu
         self._gs = gs
         self._observed_mask = observed_mask
+        self._unobserved_mask = ~observed_mask
         self._cs = cs
         self._assimilated_ode = assimilated_ode
 
@@ -129,14 +130,33 @@ class BaseSystem:
 
     @partial(jax.jit, static_argnames="self")
     def _compute_w(self, cs: jndarray, assimilated: jndarray) -> jndarray:
-        return (
-            jax.jacrev(
-                self._assimilated_ode,
-                0,
-                holomorphic=self.complex_differentiation,
-            )(cs, assimilated)[self.observed_mask]
-            / self.mu
-        )
+        om = self.observed_mask
+
+        df_dc = jax.jacrev(
+            self._assimilated_ode,
+            0,
+            holomorphic=self.complex_differentiation,
+        )(cs, assimilated)
+
+        df_dv_QW0 = self._solve_unobserved(cs, assimilated, df_dc)
+
+        return (df_dc[om] + df_dv_QW0[om]) / self.mu
+
+    @partial(jax.jit, static_argnames="self")
+    def _solve_unobserved(
+        self, cs: jndarray, assimilated: jndarray, df_dc: jndarray
+    ) -> jndarray:
+        um = self.unobserved_mask
+
+        df_dv = jax.jacrev(
+            self._assimilated_ode,
+            1,
+            holomorphic=self.complex_differentiation,
+        )(cs, assimilated)
+
+        QW0 = jnp.linalg.lstsq(df_dv[um][:, um], -df_dc[um])[0]
+
+        return df_dv[:, um] @ QW0
 
     def _set_cs(self, cs):
         self._cs = cs
@@ -146,6 +166,7 @@ class BaseSystem:
     gs = property(lambda self: self._gs)
     cs = property(lambda self: self._cs, _set_cs)
     observed_mask = property(lambda self: self._observed_mask)
+    unobserved_mask = property(lambda self: self._unobserved_mask)
     complex_differentiation = property(
         lambda self: self._complex_differentiation
     )
