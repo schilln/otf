@@ -68,6 +68,7 @@ class BaseSystem:
         self._gs = gs
         self._observed_mask = observed_mask
         self._unobserved_mask = ~observed_mask
+        self._observe_all = not jnp.any(self._unobserved_mask)
         self._cs = cs
         self._assimilated_ode = assimilated_ode
 
@@ -138,9 +139,11 @@ class BaseSystem:
             holomorphic=self.complex_differentiation,
         )(cs, assimilated)
 
-        df_dv_QW0 = self._solve_unobserved(cs, assimilated, df_dc)
-
-        return (df_dc[om] + df_dv_QW0[om]) / self.mu
+        if self._observe_all:
+            return df_dc / self.mu
+        else:
+            df_dv_QW0 = self._solve_unobserved(cs, assimilated, df_dc)
+            return (df_dc[om] + df_dv_QW0[om]) / self.mu
 
     @partial(jax.jit, static_argnames="self")
     def _solve_unobserved(
