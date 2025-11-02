@@ -1,3 +1,17 @@
+"""Utility functions for defining systems.
+
+Functions
+---------
+flatten_ode
+    Given an ODE with shaped inputs, create a flattened version.
+
+mask_from_slice
+    Compute a boolean mask from a slice and the desired shape.
+
+flatten_mask
+    Given a shaped mask, create a flattened version.
+"""
+
 from collections.abc import Callable
 
 from jax import numpy as jnp
