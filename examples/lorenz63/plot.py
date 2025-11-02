@@ -38,3 +38,27 @@ def plot(c1s, c2s, c3s, u_errors, g1, g2, g3, tls):
     fig.tight_layout()
 
     return fig, axs
+
+
+def align_zeros(limits: list[tuple[float, float]]):
+    """Align zeros of dual axes.
+
+    Based on answer by Hyde Fukui at https://stackoverflow.com/a/68869054.
+
+    Parameters
+    ----------
+    limits
+        Each tuple should correspond to the lower and upper limits of one ax.
+
+    Returns
+    -------
+    new_limits
+        Row row contains the lower and upper limits of one ax.
+    """
+    limits = np.array(limits)
+    deltas = np.diff(limits).squeeze()
+    ratios = -limits[:, 0] / deltas
+
+    lower_limits = np.min(-deltas.reshape(-1, 1) * ratios, axis=1)
+    upper_limits = np.max(deltas.reshape(-1, 1) * (1 - ratios), axis=1)
+    return np.array((lower_limits, upper_limits)).T

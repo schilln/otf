@@ -20,6 +20,7 @@ def run_update(
     t_relax: float,
     true0: jndarray,
     assimilated0: jndarray,
+    shape: tuple[int, ...],
     optimizer: Callable[[jndarray, jndarray], jndarray]
     | optim_base.BaseOptimizer
     | None = None,
@@ -41,7 +42,7 @@ def run_update(
         true0, assimilated0 = true[-1], assimilated[-1]
 
         # Update parameters
-        system.cs = optimizer(true0[system.observed_slice], assimilated0)
+        system.cs = optimizer(true0[system.observed_mask], assimilated0)
         cs.append(system.cs)
 
         t0 = tls[-1]
@@ -49,12 +50,20 @@ def run_update(
 
         # Relative error
         u_errors.append(
-            np.linalg.norm(true[1:, 0] - assimilated[1:, 0], axis=1)
-            / np.linalg.norm(true[1:, 0], axis=1)
+            np.linalg.norm(
+                true.reshape((-1, *shape))[1:, 0]
+                - assimilated.reshape((-1, *shape))[1:, 0],
+                axis=1,
+            )
+            / np.linalg.norm(true.reshape((-1, *shape))[1:, 0], axis=1)
         )
         v_errors.append(
-            np.linalg.norm(true[1:, 1:] - assimilated[1:, 1:], axis=(1, 2))
-            / np.linalg.norm(true[1:, 1:], axis=(1, 2))
+            np.linalg.norm(
+                true.reshape((-1, *shape))[1:, 1:]
+                - assimilated.reshape((-1, *shape))[1:, 1:],
+                axis=(1, 2),
+            )
+            / np.linalg.norm(true.reshape((-1, *shape))[1:, 1:], axis=(1, 2))
         )
 
     u_errors = np.concatenate(u_errors)

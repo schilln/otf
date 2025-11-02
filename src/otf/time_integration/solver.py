@@ -186,18 +186,18 @@ class RK4(MultistageSolver):
             f_t = self.system.f_true
             f_a = self.system.f_assimilated
 
-            s = self.system.observed_slice
+            m = self.system.observed_mask
 
             (true, assimilated), (dt, cs) = vals
             t = true[i - 1]
             a = assimilated[i - 1]
 
-            k1t, k1a = f_t(t), f_a(cs, t[s], a)
+            k1t, k1a = f_t(t), f_a(cs, t[m], a)
             k2t, k2a = (
                 f_t(tmp := t + dt * k1t / 2),
                 f_a(
                     cs,
-                    tmp[s],
+                    tmp[m],
                     a + dt * k1a / 2,
                 ),
             )
@@ -205,7 +205,7 @@ class RK4(MultistageSolver):
                 f_t(tmp := t + dt * k2t / 2),
                 f_a(
                     cs,
-                    tmp[s],
+                    tmp[m],
                     a + dt * k2a / 2,
                 ),
             )
@@ -213,7 +213,7 @@ class RK4(MultistageSolver):
                 f_t(tmp := t + dt * k3t),
                 f_a(
                     cs,
-                    tmp[s],
+                    tmp[m],
                     a + dt * k3a,
                 ),
             )

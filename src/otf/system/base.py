@@ -23,7 +23,7 @@ class BaseSystem:
         mu: float,
         gs: jndarray,
         cs: jndarray,
-        observed_slice: slice,
+        observed_mask: jndarray,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
     ):
@@ -38,11 +38,9 @@ class BaseSystem:
         cs
             Estimated parameter values to be used by the data assimilate system,
             to be estimated/optimized (may or may not correspond to `gs`)
-        observed_slice
-            The slice denoting the observed part of the true and data
-            assimilated system states when nudging in `f_assimilated`. May use
-            `jnp.s_` to define slice to use. To observed the entire system, use
-            `jnp.s_[:]`.
+        observed_mask
+            Boolean mask denoting the observed part of the true and data
+            assimilated system states when nudging in `f_assimilated`.
         assimilated_ode
             Function that computes the time derivative of the data assimilated
             state using the current estimated parameters `cs`.
@@ -61,13 +59,16 @@ class BaseSystem:
             equations.
             May be overridden (see docstring).
         """
+        if not isinstance(observed_mask, jndarray):
+            raise ValueError(
+                "`observed_mask` must be jnp.ndarray boolean array"
+            )
+
         self._mu = mu
         self._gs = gs
-        self._observed_slice = (
-            observed_slice
-            if isinstance(observed_slice, tuple)
-            else (observed_slice,)
-        )
+        self._observed_mask = observed_mask
+        self._unobserved_mask = ~observed_mask
+        self._observe_all = not jnp.any(self._unobserved_mask)
         self._cs = cs
         self._assimilated_ode = assimilated_ode
 
@@ -99,11 +100,11 @@ class BaseSystem:
         assimilated_p
             The time derivative of `assimilated_p`
         """
-        s = self.observed_slice
+        mask = self.observed_mask
 
         assimilated_p = self._assimilated_ode(cs, assimilated)
-        assimilated_p = assimilated_p.at[s].subtract(
-            self.mu * (assimilated[s] - true_observed)
+        assimilated_p = assimilated_p.at[mask].subtract(
+            self.mu * (assimilated[mask] - true_observed)
         )
 
         return assimilated_p
@@ -122,21 +123,43 @@ class BaseSystem:
         Returns
         -------
         W
-            The ith row corresponds to the asymptotic approximation of the ith
-            sensitivity corresponding to the ith unknown parameter ci
+            The ith column corresponds to the asymptotic approximation of the
+            ith sensitivity (i.e., w_i = dv/dc_i corresponding to the ith
+            unknown parameter c_i)
         """
         return self._compute_w(self.cs, assimilated)
 
     @partial(jax.jit, static_argnames="self")
     def _compute_w(self, cs: jndarray, assimilated: jndarray) -> jndarray:
-        return (
-            jax.jacrev(
-                self._assimilated_ode,
-                0,
-                holomorphic=self.complex_differentiation,
-            )(cs, assimilated)[self.observed_slice].T
-            / self.mu
-        )
+        om = self.observed_mask
+
+        df_dc = jax.jacrev(
+            self._assimilated_ode,
+            0,
+            holomorphic=self.complex_differentiation,
+        )(cs, assimilated)
+
+        if self._observe_all:
+            return df_dc / self.mu
+        else:
+            df_dv_QW0 = self._solve_unobserved(cs, assimilated, df_dc)
+            return (df_dc[om] + df_dv_QW0[om]) / self.mu
+
+    @partial(jax.jit, static_argnames="self")
+    def _solve_unobserved(
+        self, cs: jndarray, assimilated: jndarray, df_dc: jndarray
+    ) -> jndarray:
+        um = self.unobserved_mask
+
+        df_dv = jax.jacrev(
+            self._assimilated_ode,
+            1,
+            holomorphic=self.complex_differentiation,
+        )(cs, assimilated)
+
+        QW0 = jnp.linalg.lstsq(df_dv[um][:, um], -df_dc[um])[0]
+
+        return df_dv[:, um] @ QW0
 
     def _set_cs(self, cs):
         self._cs = cs
@@ -145,7 +168,8 @@ class BaseSystem:
     mu = property(lambda self: self._mu)
     gs = property(lambda self: self._gs)
     cs = property(lambda self: self._cs, _set_cs)
-    observed_slice = property(lambda self: self._observed_slice)
+    observed_mask = property(lambda self: self._observed_mask)
+    unobserved_mask = property(lambda self: self._unobserved_mask)
     complex_differentiation = property(
         lambda self: self._complex_differentiation
     )
@@ -169,7 +193,7 @@ class System_ModelKnown(BaseSystem):
         mu: float,
         gs: jndarray,
         cs: jndarray,
-        observed_slice: slice,
+        observed_mask: jndarray,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         true_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
@@ -188,7 +212,7 @@ class System_ModelKnown(BaseSystem):
             mu,
             gs,
             cs,
-            observed_slice,
+            observed_mask,
             assimilated_ode,
             complex_differentiation,
         )

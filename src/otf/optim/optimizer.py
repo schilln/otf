@@ -115,9 +115,9 @@ class LevenbergMarquardt(BaseOptimizer):
         self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
     ) -> jndarray:
         w = self.system.compute_w(nudged)
-        m = w.shape[0]
-        w_flat = w.reshape(m, -1)
-        mat = jnp.real(w_flat.conj() @ w_flat.T)
+        m = w.shape[1]
+        w_2d = w.reshape(-1, m)
+        mat = jnp.real(w_2d.conj().T @ w_2d)
 
         step = jnp.linalg.solve(
             mat + self.lam * jnp.eye(mat.shape[0]), gradient
