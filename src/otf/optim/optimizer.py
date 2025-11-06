@@ -56,6 +56,46 @@ class GradientDescent(BaseOptimizer):
         return -self.learning_rate * gradient
 
 
+class NewtonRaphson(BaseOptimizer):
+    def __init__(
+        self,
+        system: BaseSystem,
+    ):
+        """Root-find the error using Newton--Raphson.
+
+        As a method of root-finding, this method is expected to converge to
+        optimal parameters if the model is correct and therefore there are
+        "true" parameters to be found. If the model is not correct, this method
+        is not expected to recover optimal parameters.
+
+        Parameters
+        ----------
+        multiplicity
+            Estimate of the multiplicity of the root for each parameter.
+            If a single value,
+        """
+        super().__init__(system)
+
+    def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
+        gradient = self.compute_gradient(observed_true, nudged)
+        return self.step_from_gradient(gradient, observed_true, nudged)
+
+    def step_from_gradient(
+        self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
+    ) -> jndarray:
+        om = self.system.observed_mask
+        return (
+            -jnp.linalg.norm(nudged[om] - observed_true)
+            / 2
+            * gradient
+            / jnp.linalg.norm(gradient) ** 2
+        )
+        return jnp.linalg.lstsq(
+            -gradient.reshape(1, -1),
+            jnp.array([jnp.linalg.norm(nudged[om] - observed_true)]) / 2,
+        )[0]
+
+
 class WeightedLevenbergMarquardt(BaseOptimizer):
     def __init__(
         self, system: BaseSystem, learning_rate: float = 1e-3, lam: float = 1e-2

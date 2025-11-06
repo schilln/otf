@@ -12,6 +12,7 @@ from .lr_scheduler import (
 from .optimizer import (
     GradientDescent,
     LevenbergMarquardt,
+    NewtonRaphson,
     OptaxWrapper,
     WeightedLevenbergMarquardt,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "GradientDescent",
     "LevenbergMarquardt",
     "MultiStepLR",
+    "NewtonRaphson",
     "OptaxWrapper",
     "OptimizerChain",
     "PartialOptimizer",
