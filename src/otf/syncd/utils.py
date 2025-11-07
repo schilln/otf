@@ -15,14 +15,14 @@ from jax import numpy as jnp
 from ..optim import base as optim_base
 from ..optim import lr_scheduler
 from ..optim import optimizer as opt
-from ..system import BaseSystem
+from ..system import System_ModelKnown
 from ..time_integration import base as ti_base
 
 jndarray = jnp.ndarray
 
 
 def run_update(
-    system: BaseSystem,
+    system: System_ModelKnown,
     solver: ti_base.BaseSolver,
     dt: float,
     T0: float,
@@ -139,7 +139,7 @@ def run_update(
 
 
 def _run_update_not_multistep(
-    system: BaseSystem,
+    system: System_ModelKnown,
     solver: ti_base.MultistageSolver | ti_base.SinglestepSolver,
     dt: float,
     T0: float,
@@ -216,7 +216,7 @@ def _run_update_not_multistep(
 
 
 def _run_update_multistep(
-    system: BaseSystem,
+    system: System_ModelKnown,
     solver: ti_base.MultistepSolver,
     dt: float,
     T0: float,
