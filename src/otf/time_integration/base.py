@@ -364,7 +364,7 @@ class SinglestepSolver(BaseSolver):
             t0,
             tf,
             dt,
-            true[:, self.system.observed_mask],
+            true[:, self.system.true_observed_mask],
         )
 
         return true, assimilated, tls
@@ -695,7 +695,7 @@ class MultistepSolver(BaseSolver):
             t0,
             tf,
             dt,
-            true[:, self.system.observed_mask],
+            true[:, self.system.true_observed_mask],
             start_with_multistep=start_with_multistep,
         )
 

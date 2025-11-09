@@ -39,8 +39,8 @@ class BaseSystem:
             Estimated parameter values to be used by the data assimilate system,
             to be estimated/optimized (may or may not correspond to `gs`)
         observed_mask
-            Boolean mask denoting the observed part of the true and data
-            assimilated system states when nudging in `f_assimilated`.
+            Boolean mask denoting the observed part of the data assimilated
+            system states when nudging in `f_assimilated`
         assimilated_ode
             Function that computes the time derivative of the data assimilated
             state using the current estimated parameters `cs`.
@@ -197,6 +197,7 @@ class System_ModelKnown(BaseSystem):
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         true_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
+        true_observed_mask: jndarray | None = None,
     ):
         """
 
@@ -207,6 +208,9 @@ class System_ModelKnown(BaseSystem):
         true_ode
             Function that computes the time derivative of the true state
             Parameters: (gs, true)
+        true_observed_mask
+            Boolean mask denoting the observed part of the true system states.
+            If None or not provided, assumed equal to `observed_mask`.
         """
         super().__init__(
             mu,
@@ -218,6 +222,11 @@ class System_ModelKnown(BaseSystem):
         )
 
         self._true_ode = true_ode
+        self._true_observed_mask = (
+            true_observed_mask
+            if true_observed_mask is not None
+            else observed_mask
+        )
 
     def f_true(
         self,
@@ -238,6 +247,8 @@ class System_ModelKnown(BaseSystem):
             The time derivative of `assimilated_p`
         """
         return self._true_ode(self.gs, true)
+
+    true_observed_mask = property(lambda self: self._true_observed_mask)
 
 
 class System_ModelUnknown(BaseSystem):

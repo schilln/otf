@@ -15,14 +15,14 @@ from jax import numpy as jnp
 from ..optim import base as optim_base
 from ..optim import lr_scheduler
 from ..optim import optimizer as opt
-from ..system import BaseSystem
+from ..system import System_ModelKnown
 from ..time_integration import base as ti_base
 
 jndarray = jnp.ndarray
 
 
 def run_update(
-    system: BaseSystem,
+    system: System_ModelKnown,
     solver: ti_base.BaseSolver,
     dt: float,
     T0: float,
@@ -139,7 +139,7 @@ def run_update(
 
 
 def _run_update_not_multistep(
-    system: BaseSystem,
+    system: System_ModelKnown,
     solver: ti_base.MultistageSolver | ti_base.SinglestepSolver,
     dt: float,
     T0: float,
@@ -183,7 +183,7 @@ def _run_update_not_multistep(
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
             system.cs = optimizer(
-                true[-1][system.observed_mask], assimilated[-1]
+                true[-1][system.true_observed_mask], assimilated[-1]
             )
             lr_scheduler.step()
         cs.append(system.cs)
@@ -193,8 +193,11 @@ def _run_update_not_multistep(
 
         # Relative error
         errors.append(
-            np.linalg.norm(true[1:] - assimilated[1:])
-            / np.linalg.norm(true[1:])
+            np.linalg.norm(
+                true[1:, system.true_observed_mask]
+                - assimilated[1:, system.observed_mask]
+            )
+            / np.linalg.norm(true[1:, system.true_observed_mask])
         )
 
         if return_all:
@@ -216,7 +219,7 @@ def _run_update_not_multistep(
 
 
 def _run_update_multistep(
-    system: BaseSystem,
+    system: System_ModelKnown,
     solver: ti_base.MultistepSolver,
     dt: float,
     T0: float,
@@ -262,7 +265,9 @@ def _run_update_multistep(
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = optimizer(true[-1][system.observed_mask], assimilated[-1])
+        system.cs = optimizer(
+            true[-1][system.true_observed_mask], assimilated[-1]
+        )
         lr_scheduler.step()
     cs.append(system.cs)
 
@@ -271,7 +276,11 @@ def _run_update_multistep(
 
     # Relative error
     errors.append(
-        np.linalg.norm(true[1:] - assimilated[1:]) / np.linalg.norm(true[1:])
+        np.linalg.norm(
+            true[1:, system.true_observed_mask]
+            - assimilated[1:, system.observed_mask]
+        )
+        / np.linalg.norm(true[1:, system.true_observed_mask])
     )
 
     while tf <= Tf:
@@ -289,7 +298,7 @@ def _run_update_multistep(
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
             system.cs = optimizer(
-                true[-1][system.observed_mask], assimilated[-1]
+                true[-1][system.true_observed_mask], assimilated[-1]
             )
             lr_scheduler.step()
         cs.append(system.cs)
@@ -299,8 +308,11 @@ def _run_update_multistep(
 
         # Relative error
         errors.append(
-            np.linalg.norm(true[solver.k :] - assimilated[solver.k :])
-            / np.linalg.norm(true[solver.k :])
+            np.linalg.norm(
+                true[solver.k :, system.true_observed_mask]
+                - assimilated[solver.k :, system.observed_mask]
+            )
+            / np.linalg.norm(true[solver.k :, system.true_observed_mask])
         )
 
         if return_all:
