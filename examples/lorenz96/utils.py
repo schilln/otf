@@ -20,7 +20,8 @@ def run_update(
     t_relax: float,
     true0: jndarray,
     assimilated0: jndarray,
-    shape: tuple[int, ...],
+    true_shape: tuple[int, ...],
+    assimilated_shape: tuple[int, ...],
     optimizer: Callable[[jndarray, jndarray], jndarray]
     | optim_base.BaseOptimizer
     | None = None,
@@ -34,7 +35,9 @@ def run_update(
     cs = [system.cs]
 
     u_errors = []
-    v_errors = []
+
+    record_v_errors = true_shape[1] == assimilated_shape[1]
+    v_errors = [] if record_v_errors else None
 
     while tf <= Tf:
         true, assimilated, tls = solver.solve(true0, assimilated0, t0, tf, dt)
@@ -42,7 +45,7 @@ def run_update(
         true0, assimilated0 = true[-1], assimilated[-1]
 
         # Update parameters
-        system.cs = optimizer(true0[system.observed_mask], assimilated0)
+        system.cs = optimizer(true0[system.true_observed_mask], assimilated0)
         cs.append(system.cs)
 
         t0 = tls[-1]
@@ -51,23 +54,27 @@ def run_update(
         # Relative error
         u_errors.append(
             np.linalg.norm(
-                true.reshape((-1, *shape))[1:, 0]
-                - assimilated.reshape((-1, *shape))[1:, 0],
+                true.reshape((-1, *true_shape))[1:, :, 0]
+                - assimilated.reshape((-1, *assimilated_shape))[1:, :, 0],
                 axis=1,
             )
-            / np.linalg.norm(true.reshape((-1, *shape))[1:, 0], axis=1)
+            / np.linalg.norm(true.reshape((-1, *true_shape))[1:, :, 0], axis=1)
         )
-        v_errors.append(
-            np.linalg.norm(
-                true.reshape((-1, *shape))[1:, 1:]
-                - assimilated.reshape((-1, *shape))[1:, 1:],
-                axis=(1, 2),
+        if record_v_errors:
+            v_errors.append(
+                np.linalg.norm(
+                    true.reshape((-1, *true_shape))[1:, :, 1:]
+                    - assimilated.reshape((-1, *assimilated_shape))[1:, :, 1:],
+                    axis=(1, 2),
+                )
+                / np.linalg.norm(
+                    true.reshape((-1, *true_shape))[1:, :, 1:], axis=(1, 2)
+                )
             )
-            / np.linalg.norm(true.reshape((-1, *shape))[1:, 1:], axis=(1, 2))
-        )
 
     u_errors = np.concatenate(u_errors)
-    v_errors = np.concatenate(v_errors)
+    if record_v_errors:
+        v_errors = np.concatenate(v_errors)
 
     # Note `t0` is the actual final time of the simulation (Tf_actual).
     tls = np.linspace(T0, t0, len(u_errors) + 1)

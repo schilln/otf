@@ -186,7 +186,7 @@ class RK4(MultistageSolver):
             f_t = self.system.f_true
             f_a = self.system.f_assimilated
 
-            m = self.system.observed_mask
+            m = self.system.true_observed_mask
 
             (true, assimilated), (dt, cs) = vals
             t = true[i - 1]

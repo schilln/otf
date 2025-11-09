@@ -29,10 +29,13 @@ def plot(c1s, c2s, u_errors, v_errors, g1, g2, tls):
     ax.set_xlabel("Time")
 
     ax = axs[1, 1]
-    ax.plot(tls[1:], v_errors)
-    ax.set_yscale("log")
-    ax.set_title("Relative error in $v$")
-    ax.set_xlabel("Time")
+    if v_errors is not None:
+        ax.plot(tls[1:], v_errors)
+        ax.set_yscale("log")
+        ax.set_title("Relative error in $v$")
+        ax.set_xlabel("Time")
+    else:
+        plt.delaxes(ax)
 
     fig.tight_layout()
 
