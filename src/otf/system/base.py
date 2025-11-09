@@ -26,6 +26,7 @@ class BaseSystem:
         observed_mask: jndarray,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
+        use_unobserved_asymptotics: bool = True,
     ):
         """
 
@@ -49,6 +50,9 @@ class BaseSystem:
             Set to True if state values may take complex values (e.g., if
             time integrating Fourier coefficients). This allows
             auto-differentiation to work.
+        use_unobserved_asymptotics
+            Set to False to not use additional asymptotic information from
+            "unobserved" portion of simulated state
 
         Methods
         -------
@@ -73,6 +77,7 @@ class BaseSystem:
         self._assimilated_ode = assimilated_ode
 
         self._complex_differentiation = complex_differentiation
+        self._use_unobserved_asymptotics = use_unobserved_asymptotics
 
     def f_assimilated(
         self,
@@ -141,6 +146,8 @@ class BaseSystem:
 
         if self._observe_all:
             return df_dc / self.mu
+        elif not self._use_unobserved_asymptotics:
+            return df_dc[om] / self.mu
         else:
             df_dv_QW0 = self._solve_unobserved(cs, assimilated, df_dc)
             return (df_dc[om] + df_dv_QW0[om]) / self.mu
@@ -197,6 +204,7 @@ class System_ModelKnown(BaseSystem):
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         true_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
+        use_unobserved_asymptotics: bool = True,
         true_observed_mask: jndarray | None = None,
     ):
         """
@@ -219,6 +227,7 @@ class System_ModelKnown(BaseSystem):
             observed_mask,
             assimilated_ode,
             complex_differentiation,
+            use_unobserved_asymptotics,
         )
 
         self._true_ode = true_ode
