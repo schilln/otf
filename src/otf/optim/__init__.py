@@ -27,7 +27,7 @@ __all__ = [
     "OptaxWrapper",
     "OptimizerChain",
     "PartialOptimizer",
+    "pruned_factory",
     "Regularizer",
     "WeightedLevenbergMarquardt",
-    "pruned_factory",
 ]
