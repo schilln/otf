@@ -10,6 +10,7 @@ from .lr_scheduler import (
     MultiStepLR,
 )
 from .optimizer import (
+    DummyOptimizer,
     GradientDescent,
     LevenbergMarquardt,
     OptaxWrapper,
@@ -18,6 +19,7 @@ from .optimizer import (
 
 __all__ = [
     "DummyLRScheduler",
+    "DummyOptimizer",
     "ExponentialLR",
     "GradientDescent",
     "LevenbergMarquardt",
