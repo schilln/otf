@@ -165,6 +165,14 @@ class BaseSystem:
         )(cs, assimilated)
 
         QW0 = jnp.linalg.lstsq(df_dv[um][:, um], -df_dc[um])[0]
+        # debug(QW0)
+        QW0 = jnp.where(jnp.isinf(QW0) | jnp.isnan(QW0), -df_dc[um], QW0)
+        # debug(QW0)
+        # debug(df_dv, "df_dv")
+        # debug(df_dc, "df_dc")
+        # debug("")
+
+        # jax.debug.breakpoint()
 
         return df_dv[:, um] @ QW0
 
@@ -180,6 +188,10 @@ class BaseSystem:
     complex_differentiation = property(
         lambda self: self._complex_differentiation
     )
+
+
+def debug(val, name=""):
+    jax.debug.print("{name}\n{val}", val=val, name=name)
 
 
 class System_ModelKnown(BaseSystem):
