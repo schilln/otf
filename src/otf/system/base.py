@@ -84,12 +84,15 @@ class BaseSystem:
             0,
             holomorphic=self.complex_differentiation,
         )
+        self._vec_df_dc = jax.vmap(self._df_dc, (None, 0))
+
         if self._use_unobserved_asymptotics:
             self._df_dv = jax.jacrev(
                 self._assimilated_ode,
                 1,
                 holomorphic=self.complex_differentiation,
             )
+        self._vec_df_dv = jax.vmap(self._df_dv, (None, 0))
 
     def f_assimilated(
         self,
