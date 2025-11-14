@@ -316,8 +316,8 @@ def update_direct_sim(
     cs = system.cs
     om, um = system.observed_mask, system.unobserved_mask
 
-    df_dvs = jax.vmap(system._df_dv, (None, 0))(cs, assimilated)
-    df_dcs = jax.vmap(system._df_dc, (None, 0))(cs, assimilated)
+    df_dvs = system._vec_df_dv(cs, assimilated)
+    df_dcs = system._vec_df_dc(cs, assimilated)
 
     x0 = jnp.zeros_like(df_dcs[0][um])
     dt = system._dt
