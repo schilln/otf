@@ -321,17 +321,17 @@ def update_direct_sim(
 
     x0 = jnp.zeros_like(df_dcs[0][um])
     dt = system._dt
-    n = assimilated.shape[0]
+    n = a.shape[0]
     qw0 = _solve(x0, df_dvs[:, um][:, :, um], df_dcs[:, um], dt)
     # qw0 = jnp.linalg.lstsq(df_dv[:, um][:, :, um], -df_dc)
 
-    w = df_dcs[1:, om] - (df_dvs[:, :, um] @ qw0)[1:, om]
+    w = df_dcs[1:, om] - (df_dvs[:, :, um] @ qw0[1:])[1:, om]
     w /= system.mu
 
     diff = a[:, om] - t
     m = w.shape[2]
     gradient = jnp.real(
-        jnp.expand_dims(diff.conj(), 1) @ w.reshape(n - 1, -1, m)
+        jnp.expand_dims(diff.conj(), 1) @ w.reshape(n, -1, m)
     ).squeeze(1)
     step = optimizer.step_from_gradient(
         gradient.mean(axis=0), t.mean(axis=0), a.mean(axis=0)
@@ -341,10 +341,10 @@ def update_direct_sim(
 
 def _solve(x0, df_dvs, df_dcs, dt):
     n = df_dvs.shape[0]
-    xs = jnp.full((n, *x0.shape), jnp.inf)
+    xs = jnp.full((n + 1, *x0.shape), jnp.inf)
     xs = xs.at[0].set(x0)
 
-    (xs,), _ = lax.fori_loop(1, n, _loop, ((xs,), (df_dvs, df_dcs, dt)))
+    (xs,), _ = lax.fori_loop(1, n + 1, _loop, ((xs,), (df_dvs, df_dcs, dt)))
 
     return xs
 
