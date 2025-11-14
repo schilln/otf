@@ -311,13 +311,18 @@ def update_direct_sim(
     end: int,
     k: int,
 ) -> jndarray:
-    t, a = true_observed[start - k + 2 : end], assimilated[1:]
+    steps = 10
+
+    t, a = (
+        true_observed[start - k + 2 + (steps - 1) : end : steps],
+        assimilated[steps::steps],
+    )
     system = optimizer.system
     cs = system.cs
     om, um = system.observed_mask, system.unobserved_mask
 
-    df_dvs = system._vec_df_dv(cs, assimilated)
-    df_dcs = system._vec_df_dc(cs, assimilated)
+    df_dvs = system._vec_df_dv(cs, assimilated[::steps])
+    df_dcs = system._vec_df_dc(cs, assimilated[::steps])
 
     x0 = jnp.zeros_like(df_dcs[0][um])
     dt = system._dt
