@@ -92,7 +92,7 @@ class BaseSystem:
                 1,
                 holomorphic=self.complex_differentiation,
             )
-        self._vec_df_dv = jax.vmap(self._df_dv, (None, 0))
+            self._vec_df_dv = jax.vmap(self._df_dv, (None, 0))
 
     def f_assimilated(
         self,
