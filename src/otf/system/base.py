@@ -79,6 +79,21 @@ class BaseSystem:
         self._complex_differentiation = complex_differentiation
         self._use_unobserved_asymptotics = use_unobserved_asymptotics
 
+        self._df_dc = jax.jacrev(
+            self._assimilated_ode,
+            0,
+            holomorphic=self.complex_differentiation,
+        )
+        self._vec_df_dc = jax.vmap(self._df_dc, (None, 0))
+
+        if self._use_unobserved_asymptotics:
+            self._df_dv = jax.jacrev(
+                self._assimilated_ode,
+                1,
+                holomorphic=self.complex_differentiation,
+            )
+            self._vec_df_dv = jax.vmap(self._df_dv, (None, 0))
+
     def f_assimilated(
         self,
         cs: jndarray,
@@ -138,11 +153,7 @@ class BaseSystem:
     def _compute_w(self, cs: jndarray, assimilated: jndarray) -> jndarray:
         om = self.observed_mask
 
-        df_dc = jax.jacrev(
-            self._assimilated_ode,
-            0,
-            holomorphic=self.complex_differentiation,
-        )(cs, assimilated)
+        df_dc = self._df_dc(cs, assimilated)
 
         if self._observe_all:
             return df_dc / self.mu
@@ -158,11 +169,7 @@ class BaseSystem:
     ) -> jndarray:
         um = self.unobserved_mask
 
-        df_dv = jax.jacrev(
-            self._assimilated_ode,
-            1,
-            holomorphic=self.complex_differentiation,
-        )(cs, assimilated)
+        df_dv = self._df_dv(cs, assimilated)
 
         QW0 = jnp.linalg.lstsq(df_dv[um][:, um], -df_dc[um])[0]
         # debug(QW0)

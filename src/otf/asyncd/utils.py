@@ -9,6 +9,7 @@ from enum import Enum
 import jax
 import numpy as np
 import scipy
+from jax import lax
 from jax import numpy as jnp
 
 from ..optim import base as optim_base
@@ -24,6 +25,7 @@ class ParameterUpdateOption(Enum):
     last_state = 0
     mean_state = 1
     mean_gradient = 2
+    direct_simulation = 3
 
 
 def run_update(
@@ -151,6 +153,9 @@ def run_update(
             update = update_mean_state
         case ParameterUpdateOption.mean_gradient:
             update = update_mean_derivative
+        case ParameterUpdateOption.direct_simulation:
+            system._dt = dt
+            update = update_direct_sim
 
     if weight is None:
         norm = np.linalg.norm
@@ -296,3 +301,61 @@ def update_mean_derivative(
         assimilated[1:].mean(axis=0),
     )
     return optimizer.system.cs + jnp.real(step)
+
+
+def update_direct_sim(
+    optimizer: optim_base.BaseOptimizer,
+    true_observed: jndarray,
+    assimilated: jndarray,
+    start: int,
+    end: int,
+    k: int,
+) -> jndarray:
+    t, a = true_observed[start - k + 2 : end], assimilated[1:]
+    system = optimizer.system
+    cs = system.cs
+    om, um = system.observed_mask, system.unobserved_mask
+
+    df_dvs = system._vec_df_dv(cs, assimilated)
+    df_dcs = system._vec_df_dc(cs, assimilated)
+
+    x0 = jnp.zeros_like(df_dcs[0][um])
+    dt = system._dt
+    n = a.shape[0]
+    qw0 = _solve(x0, df_dvs[:, um][:, :, um], df_dcs[:, um], dt)
+    # qw0 = jnp.linalg.lstsq(df_dv[:, um][:, :, um], -df_dc)
+
+    w = df_dcs[1:, om] - (df_dvs[:, :, um] @ qw0[1:])[1:, om]
+    w /= system.mu
+
+    diff = a[:, om] - t
+    m = w.shape[2]
+    gradient = jnp.real(
+        jnp.expand_dims(diff.conj(), 1) @ w.reshape(n, -1, m)
+    ).squeeze(1)
+    step = optimizer.step_from_gradient(
+        gradient.mean(axis=0), t.mean(axis=0), a.mean(axis=0)
+    )
+    return optimizer.system.cs + jnp.real(step)
+
+
+def _solve(x0, df_dvs, df_dcs, dt):
+    n = df_dvs.shape[0]
+    xs = jnp.full((n + 1, *x0.shape), jnp.inf)
+    xs = xs.at[0].set(x0)
+
+    (xs,), _ = lax.fori_loop(1, n + 1, _loop, ((xs,), (df_dvs, df_dcs, dt)))
+
+    return xs
+
+
+def _loop(i, vals):
+    ((xs,), (df_dvs, df_dcs, dt)) = vals
+    df_dv = df_dvs[i]
+    df_dc = df_dcs[i]
+    xs = xs.at[i].set(xs[i - 1] + dt * f(xs[i - 1], df_dv, df_dc))
+    return (xs,), (df_dvs, df_dcs, dt)
+
+
+def f(x, df_dv, df_dc):
+    return -df_dv @ x - df_dc
