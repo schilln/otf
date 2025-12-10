@@ -26,7 +26,7 @@ class BaseSystem:
         observed_mask: jndarray,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
-        use_unobserved_asymptotics: bool = True,
+        use_unobserved_asymptotics: bool = False,
     ):
         """
 
