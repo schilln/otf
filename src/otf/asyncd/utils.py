@@ -295,4 +295,4 @@ def update_mean_derivative(
         true_observed[start - k + 2 : end].mean(axis=0),
         assimilated[1:].mean(axis=0),
     )
-    return optimizer.system.cs + jnp.real(step)
+    return optimizer.system.cs + step
