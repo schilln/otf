@@ -122,7 +122,7 @@ class BaseOptimizer:
         new_cs
             The new values for `system.cs`
         """
-        return self.system.cs + jnp.real(self.step(observed_true, nudged))
+        return self.system.cs + self.step(observed_true, nudged)
 
     def compute_gradient(
         self, observed_true: jndarray, nudged: jndarray
@@ -137,10 +137,10 @@ class BaseOptimizer:
         w = self.system.compute_w(nudged)
         m = w.shape[1]
         if self._weight is None:
-            gradient = jnp.real(diff.conj() @ w.reshape(-1, m))
+            gradient = diff @ w.reshape(-1, m).conj()
         else:
-            gradient = jnp.real(diff.conj() @ self._weight @ w.reshape(-1, m))
-        return gradient
+            gradient = diff @ self._weight @ w.reshape(-1, m).conj()
+        return gradient if self.system.cs.dtype == complex else gradient.real
 
     def set_weight(self, weight: jndarray | None):
         """Weight the error using a (positive definite) matrix.

@@ -142,7 +142,10 @@ class BaseSystem:
             self._assimilated_ode,
             0,
             holomorphic=self.complex_differentiation,
-        )(cs, assimilated)
+        )(
+            cs.astype(complex) if self.complex_differentiation else cs,
+            assimilated,
+        )
 
         if self._observe_all:
             return df_dc / self.mu
@@ -162,7 +165,10 @@ class BaseSystem:
             self._assimilated_ode,
             1,
             holomorphic=self.complex_differentiation,
-        )(cs, assimilated)
+        )(
+            cs.astype(complex) if self.complex_differentiation else cs,
+            assimilated,
+        )
 
         QW0 = jnp.linalg.lstsq(df_dv[um][:, um], -df_dc[um])[0]
 
