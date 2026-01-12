@@ -210,7 +210,7 @@ class System_ModelKnown(BaseSystem):
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         true_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
-        use_unobserved_asymptotics: bool = True,
+        use_unobserved_asymptotics: bool = False,
         true_observed_mask: jndarray | None = None,
     ):
         """
