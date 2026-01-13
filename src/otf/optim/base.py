@@ -31,6 +31,7 @@ import numpy as np
 from jax import numpy as jnp
 
 from ..system.base import BaseSystem
+from . import _sensitivity
 
 jndarray = jnp.ndarray
 
@@ -134,7 +135,7 @@ class BaseOptimizer:
         nudged states.
         """
         diff = nudged[self.system.observed_mask] - observed_true
-        w = self.system.compute_w(nudged)
+        w = _sensitivity.compute_sensitivity(self.system, nudged)
         m = w.shape[1]
         if self._weight is None:
             gradient = diff @ w.reshape(-1, m).conj()

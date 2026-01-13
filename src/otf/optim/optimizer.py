@@ -13,6 +13,7 @@ import optax
 from jax import numpy as jnp
 
 from ..system.base import BaseSystem
+from . import _sensitivity
 from .base import BaseOptimizer
 
 jndarray = jnp.ndarray
@@ -114,7 +115,7 @@ class LevenbergMarquardt(BaseOptimizer):
     def step_from_gradient(
         self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
     ) -> jndarray:
-        w = self.system.compute_w(nudged)
+        w = _sensitivity.compute_sensitivity(self.system, nudged)
         m = w.shape[1]
         w_2d = w.reshape(-1, m)
         mat = jnp.real(w_2d.conj().T @ w_2d)
