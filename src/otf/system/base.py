@@ -6,6 +6,7 @@ OTF in addition estimates the model governing the observed system.
 
 from collections.abc import Callable
 
+import jax
 from jax import numpy as jnp
 
 jndarray = jnp.ndarray
@@ -71,6 +72,35 @@ class BaseSystem:
         self._assimilated_ode = assimilated_ode
 
         self._complex_differentiation = complex_differentiation
+
+        _df_dc = jax.jacrev(
+            self.assimilated_ode,
+            0,
+            holomorphic=self._complex_differentiation,
+        )
+        _df_dv = jax.jacrev(
+            self.assimilated_ode,
+            1,
+            holomorphic=self._complex_differentiation,
+        )
+        if self._complex_differentiation:
+
+            def df_dc(cs: jndarray, assimilated: jndarray) -> jndarray:
+                return _df_dc(cs.astype(complex), assimilated)
+
+            def df_dv(cs: jndarray, assimilated: jndarray) -> jndarray:
+                return _df_dv(cs.astype(complex), assimilated)
+        else:
+
+            def df_dc(cs: jndarray, assimilated: jndarray) -> jndarray:
+                return _df_dc(cs, assimilated)
+
+            def df_dv(cs: jndarray, assimilated: jndarray) -> jndarray:
+                return _df_dv(cs, assimilated)
+
+        self._df_dc = df_dc
+        self._df_dv = df_dv
+
         self._use_unobserved_asymptotics = use_unobserved_asymptotics
 
     def f_assimilated(
@@ -119,6 +149,8 @@ class BaseSystem:
     unobserved_mask = property(lambda self: self._unobserved_mask)
     observe_all = property(lambda self: self._observe_all)
     assimilated_ode = property(lambda self: self._assimilated_ode)
+    df_dc = property(lambda self: self._df_dc)
+    df_dv = property(lambda self: self._df_dv)
     complex_differentiation = property(
         lambda self: self._complex_differentiation
     )

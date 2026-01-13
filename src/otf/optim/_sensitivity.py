@@ -34,14 +34,7 @@ def _compute_sensitivity(
     s = system
     om = s.observed_mask
 
-    df_dc = jax.jacrev(
-        s.assimilated_ode,
-        0,
-        holomorphic=s.complex_differentiation,
-    )(
-        cs.astype(complex) if s.complex_differentiation else cs,
-        assimilated,
-    )
+    df_dc = s.df_dc(cs, assimilated)
 
     if s.observe_all:
         return df_dc / s.mu
@@ -59,14 +52,7 @@ def _solve_unobserved(
     s = system
     um = s.unobserved_mask
 
-    df_dv = jax.jacrev(
-        s.assimilated_ode,
-        1,
-        holomorphic=s.complex_differentiation,
-    )(
-        cs.astype(complex) if s.complex_differentiation else cs,
-        assimilated,
-    )
+    df_dv = s.df_dv(cs, assimilated)
 
     QW0 = jnp.linalg.lstsq(df_dv[um][:, um], -df_dc[um])[0]
 
