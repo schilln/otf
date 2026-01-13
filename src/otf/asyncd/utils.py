@@ -4,9 +4,7 @@ returning the sequences of parameter values and data assimilated-vs-true errors.
 """
 
 from collections.abc import Callable
-from enum import Enum
 
-import jax
 import numpy as np
 import scipy
 from jax import numpy as jnp
@@ -16,14 +14,10 @@ from ..optim import lr_scheduler
 from ..optim import optimizer as opt
 from ..system import BaseSystem
 from ..time_integration import base as ti_base
+from . import update_utils
+from .update_utils import ParameterUpdateOption
 
 jndarray = jnp.ndarray
-
-
-class ParameterUpdateOption(Enum):
-    last_state = 0
-    mean_state = 1
-    mean_gradient = 2
 
 
 def run_update(
@@ -144,13 +138,7 @@ def run_update(
     if return_all:
         assimilateds = [np.expand_dims(assimilated0, 0)]
 
-    match parameter_update_option:
-        case ParameterUpdateOption.last_state:
-            update = update_last_state
-        case ParameterUpdateOption.mean_state:
-            update = update_mean_state
-        case ParameterUpdateOption.mean_gradient:
-            update = update_mean_derivative
+    update = update_utils.get_update_function(parameter_update_option)
 
     if weight is None:
         norm = np.linalg.norm
@@ -252,47 +240,3 @@ def run_update(
         tls,
         np.concatenate(assimilateds) if return_all else assimilated,
     )
-
-
-def update_last_state(
-    optimizer: optim_base.BaseOptimizer,
-    true_observed: jndarray,
-    assimilated: jndarray,
-    start: int,
-    end: int,
-    k: int,
-) -> jndarray:
-    return optimizer(true_observed[end - 1], assimilated[-1])
-
-
-def update_mean_state(
-    optimizer: optim_base.BaseOptimizer,
-    true_observed: jndarray,
-    assimilated: jndarray,
-    start: int,
-    end: int,
-    k: int,
-) -> jndarray:
-    return optimizer(
-        true_observed[start - k + 2 : end].mean(axis=0),
-        assimilated[1:].mean(axis=0),
-    )
-
-
-def update_mean_derivative(
-    optimizer: optim_base.BaseOptimizer,
-    true_observed: jndarray,
-    assimilated: jndarray,
-    start: int,
-    end: int,
-    k: int,
-) -> jndarray:
-    mean_gradient = jax.vmap(optimizer.compute_gradient, 0)(
-        true_observed[start - k + 2 : end], assimilated[1:]
-    ).mean(axis=0)
-    step = optimizer.step_from_gradient(
-        mean_gradient,
-        true_observed[start - k + 2 : end].mean(axis=0),
-        assimilated[1:].mean(axis=0),
-    )
-    return optimizer.system.cs + step
