@@ -3,7 +3,7 @@ from jax import numpy as jnp
 
 from ...system.base import BaseSystem
 from ..parameter_update_option import UpdateOption
-from . import _sensitivity
+from . import sensitivity
 
 jndarray = jnp.ndarray
 
@@ -68,7 +68,7 @@ class SensitivityGradient(GradientComputer):
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         diff = assimilated[self.system.observed_mask] - observed_true
-        w = _sensitivity.compute_sensitivity(self.system, assimilated)
+        w = sensitivity._compute_sensitivity(self.system, assimilated)
         m = w.shape[1]
         if self._weight is None:
             gradient = diff @ w.reshape(-1, m).conj()

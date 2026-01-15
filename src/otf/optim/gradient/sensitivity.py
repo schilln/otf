@@ -8,7 +8,7 @@ from ...system.base import BaseSystem
 jndarray = jnp.ndarray
 
 
-def compute_sensitivity(system: BaseSystem, assimilated: jndarray) -> jndarray:
+def _compute_sensitivity(system: BaseSystem, assimilated: jndarray) -> jndarray:
     """Compute the leading-order approximation of the sensitivity equations.
 
     Parameters
@@ -24,11 +24,11 @@ def compute_sensitivity(system: BaseSystem, assimilated: jndarray) -> jndarray:
         ith sensitivity (i.e., w_i = dv/dc_i corresponding to the ith
         unknown parameter c_i)
     """
-    return _compute_sensitivity(assimilated, system.cs, system)
+    return __compute_sensitivity(assimilated, system.cs, system)
 
 
 @partial(jax.jit, static_argnames="system")
-def _compute_sensitivity(
+def __compute_sensitivity(
     assimilated: jndarray, cs: jndarray, system: BaseSystem
 ) -> jndarray:
     s = system
