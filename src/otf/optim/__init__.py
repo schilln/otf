@@ -4,7 +4,7 @@ from .base import (
     Regularizer,
     pruned_factory,
 )
-from .gradient.computer import (
+from .gradient import (
     SensitivityGradient,
 )
 from .lr_scheduler import (
