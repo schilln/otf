@@ -25,6 +25,8 @@ class SensitivityGradient(GradientComputer):
                 self.compute_gradient = self._mean_state
             case UpdateOption.mean_gradient:
                 self.compute_gradient = self._mean_derivative
+            case _:
+                raise NotImplementedError("update option is not supported")
 
     def _compute_gradient(
         self, observed_true: jndarray, assimilated: jndarray
