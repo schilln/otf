@@ -5,7 +5,7 @@ from jax import numpy as jnp
 
 from ...system.base import BaseSystem
 from ..parameter_update_option import UpdateOption
-from .computer import GradientComputer
+from .gradient_computer import GradientComputer
 
 jndarray = jnp.ndarray
 

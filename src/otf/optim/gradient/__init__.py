@@ -1,4 +1,4 @@
-from .computer import (
+from .gradient_computer import (
     GradientComputer,
 )
 from .sensitivity import (
