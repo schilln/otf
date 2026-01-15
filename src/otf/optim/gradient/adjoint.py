@@ -24,7 +24,9 @@ class AdjointGradient(GradientComputer):
             assimilated, adjoint, self.system.df_dc, self.system.cs
         )
 
-    def compute_adjoint(self, observed_true: jndarray, assimilated: jndarray):
+    def compute_adjoint(
+        self, observed_true: jndarray, assimilated: jndarray
+    ) -> jndarray:
         return _compute_adjoint(
             observed_true,
             assimilated[:, self.system.observed_mask],
