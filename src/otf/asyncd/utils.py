@@ -15,7 +15,7 @@ from ..optim import optimizer as opt
 from ..system import BaseSystem
 from ..time_integration import base as ti_base
 from . import update_utils
-from .update_utils import ParameterUpdateOption
+from ..optim.parameter_update_option import UpdateOption
 
 jndarray = jnp.ndarray
 
@@ -36,7 +36,7 @@ def run_update(
     t_begin_updates: float | None = None,
     return_all: bool = False,
     true_actual: jndarray | None = None,
-    parameter_update_option: ParameterUpdateOption = ParameterUpdateOption.last_state,
+    parameter_update_option: UpdateOption = UpdateOption.last_state,
     weight: jndarray | None = None,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
