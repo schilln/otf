@@ -13,6 +13,7 @@ import optax
 from jax import numpy as jnp
 
 from ..system.base import BaseSystem
+from . import gradient
 from .base import BaseOptimizer
 from .gradient import sensitivity
 
@@ -134,6 +135,7 @@ class OptaxWrapper(BaseOptimizer):
         self,
         system: BaseSystem,
         optimizer: optax.GradientTransformationExtraArgs,
+        gradient_computer: gradient.GradientComputer | None = None,
     ):
         """Wrap a given Optax optimizer.
 
@@ -143,7 +145,7 @@ class OptaxWrapper(BaseOptimizer):
             Instance of `optax.GradientTransformationExtraArgs`
             For example, `optax.adam(learning_rate=1e-1)`.
         """
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
         self.optimizer = optimizer
         self.opt_state = self.optimizer.init(system.cs)
 
