@@ -25,9 +25,11 @@ class AdjointGradient(GradientComputer):
         )
 
     def compute_adjoint(self, observed_true: jndarray, assimilated: jndarray):
-        om = self.system.observed_mask
-
-        return -(assimilated[:, om] - observed_true) / self.system.mu
+        return _compute_adjoint(
+            observed_true,
+            assimilated[:, self.system.observed_mask],
+            self.system.mu,
+        )
 
 
 @partial(jax.jit, static_argnames=("df_dc_fn",))
@@ -36,3 +38,10 @@ def _compute_gradient(
 ) -> jndarray:
     df_dc = jax.vmap(df_dc_fn, (None, 0))(cs, assimilated)
     return -(jnp.expand_dims(adjoint, 1) @ df_dc).squeeze().mean(axis=0)
+
+
+@jax.jit
+def _compute_adjoint(
+    observed_true: jndarray, observed_assimilated: jndarray, mu: float
+) -> jndarray:
+    return -(observed_assimilated - observed_true) / mu
