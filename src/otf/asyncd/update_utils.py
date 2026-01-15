@@ -40,6 +40,8 @@ def get_update_function(
             update = _last_state
         case UpdateOption.mean_state | UpdateOption.mean_gradient:
             update = _multiple_state
+        case _:
+            raise NotImplementedError("update option is not supported")
 
     return update
 
