@@ -4,6 +4,9 @@ from .base import (
     Regularizer,
     pruned_factory,
 )
+from .gradient.computer import (
+    SensitivityGradient,
+)
 from .lr_scheduler import (
     DummyLRScheduler,
     ExponentialLR,
@@ -29,5 +32,6 @@ __all__ = [
     "PartialOptimizer",
     "pruned_factory",
     "Regularizer",
+    "SensitivityGradient",
     "WeightedLevenbergMarquardt",
 ]

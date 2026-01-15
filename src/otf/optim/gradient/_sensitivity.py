@@ -3,7 +3,7 @@ from functools import partial
 import jax
 from jax import numpy as jnp
 
-from ..system.base import BaseSystem
+from ...system.base import BaseSystem
 
 jndarray = jnp.ndarray
 

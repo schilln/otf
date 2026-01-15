@@ -1,9 +1,9 @@
 import jax
 from jax import numpy as jnp
 
-from ..system.base import BaseSystem
+from ...system.base import BaseSystem
+from ..parameter_update_option import UpdateOption
 from . import _sensitivity
-from .parameter_update_option import UpdateOption
 
 jndarray = jnp.ndarray
 

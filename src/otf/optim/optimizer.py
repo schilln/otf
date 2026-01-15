@@ -13,8 +13,8 @@ import optax
 from jax import numpy as jnp
 
 from ..system.base import BaseSystem
-from . import _sensitivity
 from .base import BaseOptimizer
+from .gradient import _sensitivity
 
 jndarray = jnp.ndarray
 

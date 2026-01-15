@@ -31,7 +31,7 @@ import numpy as np
 from jax import numpy as jnp
 
 from ..system.base import BaseSystem
-from . import gradient
+from .gradient import computer
 
 jndarray = jnp.ndarray
 
@@ -40,7 +40,7 @@ class BaseOptimizer:
     def __init__(
         self,
         system: BaseSystem,
-        gradient_computer: gradient.GradientComputer | None = None,
+        gradient_computer: computer.GradientComputer | None = None,
     ):
         """Abstract base class for optimizers of `System`s to compute updated
         parameter values.
@@ -73,7 +73,7 @@ class BaseOptimizer:
         step
         """
         if gradient_computer is None:
-            gradient_computer = gradient.SensitivityGradient(system)
+            gradient_computer = computer.SensitivityGradient(system)
 
         self._system = system
         self._weight = None
