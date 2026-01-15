@@ -138,7 +138,7 @@ def run_update(
     if return_all:
         assimilateds = [np.expand_dims(assimilated0, 0)]
 
-    update = update_utils.get_update_function(parameter_update_option)
+    update = update_utils.get_update_function(optimizer)
 
     if weight is None:
         norm = np.linalg.norm

@@ -1,6 +1,5 @@
 from collections.abc import Callable
 
-import jax
 from jax import numpy as jnp
 
 from ..optim import base
@@ -10,7 +9,7 @@ jndarray = jnp.ndarray
 
 
 def get_update_function(
-    parameter_update_option: UpdateOption,
+    optimizer: base.BaseOptimizer,
 ) -> Callable[
     [base.BaseOptimizer, jndarray, jndarray, int, int, int], jndarray
 ]:
@@ -18,8 +17,7 @@ def get_update_function(
 
     Parameters
     ----------
-    parameter_update_option
-        Enum indicating which method of parameter update to use
+    optimizer
 
     Returns
     -------
@@ -37,18 +35,16 @@ def get_update_function(
         and returns the updated parameter values.
 
     """
-    match parameter_update_option:
+    match optimizer.update_option:
         case UpdateOption.last_state:
-            update = _update_last_state
-        case UpdateOption.mean_state:
-            update = _update_mean_state
-        case UpdateOption.mean_gradient:
-            update = _update_mean_derivative
+            update = _last_state
+        case UpdateOption.mean_state | UpdateOption.mean_gradient:
+            update = _multiple_state
 
     return update
 
 
-def _update_last_state(
+def _last_state(
     optimizer: base.BaseOptimizer,
     true_observed: jndarray,
     assimilated: jndarray,
@@ -56,10 +52,12 @@ def _update_last_state(
     end: int,
     num_multistep: int,
 ) -> jndarray:
-    return optimizer(true_observed[end - 1], assimilated[-1])
+    # Taking a slice of one item instead of just indexing (e.g., array[-1])
+    # preserves the number of dimension of the resulting array (i.e., 2D).
+    return optimizer(true_observed[end - 1 : end], assimilated[-1:])
 
 
-def _update_mean_state(
+def _multiple_state(
     optimizer: base.BaseOptimizer,
     true_observed: jndarray,
     assimilated: jndarray,
@@ -68,25 +66,5 @@ def _update_mean_state(
     num_multistep: int,
 ) -> jndarray:
     return optimizer(
-        true_observed[start - num_multistep + 2 : end].mean(axis=0),
-        assimilated[1:].mean(axis=0),
-    )
-
-
-def _update_mean_derivative(
-    optimizer: base.BaseOptimizer,
-    true_observed: jndarray,
-    assimilated: jndarray,
-    start: int,
-    end: int,
-    num_multistep: int,
-) -> jndarray:
-    mean_gradient = jax.vmap(optimizer.compute_gradient, 0)(
         true_observed[start - num_multistep + 2 : end], assimilated[1:]
-    ).mean(axis=0)
-    step = optimizer.step_from_gradient(
-        mean_gradient,
-        true_observed[start - num_multistep + 2 : end].mean(axis=0),
-        assimilated[1:].mean(axis=0),
     )
-    return optimizer.system.cs + step

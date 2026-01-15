@@ -110,7 +110,9 @@ class LevenbergMarquardt(BaseOptimizer):
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         gradient = self.compute_gradient(observed_true, nudged)
-        return self.step_from_gradient(gradient, observed_true, nudged)
+        return self.step_from_gradient(
+            gradient, observed_true.mean(axis=0), nudged.mean(axis=0)
+        )
 
     def step_from_gradient(
         self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
