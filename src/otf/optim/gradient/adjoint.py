@@ -42,11 +42,15 @@ class AdjointGradient(GradientComputer):
     def compute_adjoint(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        return _compute_adjoint(
-            observed_true,
-            assimilated[:, self.system.observed_mask],
-            self.system.mu,
+        adjoint = jnp.zeros_like(assimilated)
+        adjoint = adjoint.at[:, self.system.observed_mask].set(
+            _compute_adjoint(
+                observed_true,
+                assimilated[:, self.system.observed_mask],
+                self.system.mu,
+            )
         )
+        return adjoint
 
     def compute_adjoint_sim(
         self, observed_true: jndarray, assimilated: jndarray
@@ -108,8 +112,8 @@ class AdjointSystem(System_ModelUnknown):
             assimilated__observed_diff[: self._n],
             assimilated__observed_diff[self._n :],
         )
-        return (
-            self.df_dv_fn(cs, assimilated).T @ adjoint
-            + self.mu * adjoint[self.observed_mask]
-            + observed_diff
+        val = self.df_dv_fn(cs, assimilated).T @ adjoint
+        val = val.at[self.observed_mask].add(
+            self.mu * adjoint[self.observed_mask] + observed_diff
         )
+        return val
