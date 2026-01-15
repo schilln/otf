@@ -1,3 +1,4 @@
+from .adjoint import AdjointGradient
 from .gradient_computer import (
     GradientComputer,
 )
@@ -6,6 +7,7 @@ from .sensitivity import (
 )
 
 __all__ = [
+    "AdjointGradient",
     "GradientComputer",
     "SensitivityGradient",
 ]

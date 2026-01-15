@@ -38,7 +38,11 @@ def get_update_function(
     match optimizer.update_option:
         case UpdateOption.last_state:
             update = _last_state
-        case UpdateOption.mean_state | UpdateOption.mean_gradient:
+        case (
+            UpdateOption.mean_state
+            | UpdateOption.mean_gradient
+            | UpdateOption.adjoint
+        ):
             update = _multiple_state
         case _:
             raise NotImplementedError("update option is not supported")
