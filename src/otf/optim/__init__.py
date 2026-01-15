@@ -19,6 +19,7 @@ from .optimizer import (
     OptaxWrapper,
     WeightedLevenbergMarquardt,
 )
+from .parameter_update_option import UpdateOption
 
 __all__ = [
     "DummyLRScheduler",
@@ -33,5 +34,6 @@ __all__ = [
     "pruned_factory",
     "Regularizer",
     "SensitivityGradient",
+    "UpdateOption",
     "WeightedLevenbergMarquardt",
 ]
