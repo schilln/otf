@@ -78,14 +78,17 @@ def _compute_gradient(
     assimilated: jndarray, adjoint: jndarray, df_dc_fn: Callable, cs: jndarray
 ) -> jndarray:
     df_dc = jax.vmap(df_dc_fn, (None, 0))(cs, assimilated)
-    return -(jnp.expand_dims(adjoint, 1) @ df_dc).squeeze().mean(axis=0)
+    gradient = (
+        -(jnp.expand_dims(adjoint, 1) @ df_dc).squeeze().mean(axis=0).conj()
+    )
+    return gradient if cs.dtype == complex else gradient.real
 
 
 @jax.jit
 def _compute_adjoint(
     observed_true: jndarray, observed_assimilated: jndarray, mu: float
 ) -> jndarray:
-    return -(observed_assimilated - observed_true) / mu
+    return -(observed_assimilated - observed_true).conj() / mu
 
 
 class AdjointSystem(System_ModelUnknown):
@@ -110,7 +113,7 @@ class AdjointSystem(System_ModelUnknown):
     ) -> jndarray:
         assimilated, observed_diff = (
             assimilated__observed_diff[: self._n],
-            assimilated__observed_diff[self._n :],
+            assimilated__observed_diff[self._n :].conj(),
         )
         val = self.df_dv_fn(cs, assimilated).T @ adjoint
         val = val.at[self.observed_mask].add(
