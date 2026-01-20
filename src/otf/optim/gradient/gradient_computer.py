@@ -1,19 +1,13 @@
 from jax import numpy as jnp
 
 from ...system.base import BaseSystem
-from ..parameter_update_option import UpdateOption
 
 jndarray = jnp.ndarray
 
 
 class GradientComputer:
-    def __init__(
-        self,
-        system: BaseSystem,
-        update_option: UpdateOption = UpdateOption.last_state,
-    ):
+    def __init__(self, system: BaseSystem):
         self._system = system
-        self._update_option = update_option
         self._weight = None
 
     def compute_gradient(
@@ -43,4 +37,3 @@ class GradientComputer:
         self._weight = weight
 
     system = property(lambda self: self._system)
-    update_option = property(lambda self: self._update_option)

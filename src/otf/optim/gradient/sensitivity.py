@@ -1,13 +1,28 @@
+from enum import Enum
 from functools import partial
 
 import jax
 from jax import numpy as jnp
 
 from ...system.base import BaseSystem
-from ..parameter_update_option import UpdateOption
 from .gradient_computer import GradientComputer
 
 jndarray = jnp.ndarray
+
+
+class UpdateOption(Enum):
+    """Enum for selecting parameter update methods.
+
+    Options include:
+
+    - last_state: Uses the last observed state for the update.
+    - mean_state: Uses the mean of the observed states for the update.
+    - mean_gradient: Uses the mean of the gradients for the update.
+    """
+
+    last_state = 0
+    mean_state = 1
+    mean_gradient = 2
 
 
 class SensitivityGradient(GradientComputer):
@@ -16,7 +31,9 @@ class SensitivityGradient(GradientComputer):
         system: BaseSystem,
         update_option: UpdateOption = UpdateOption.last_state,
     ):
-        super().__init__(system, update_option)
+        super().__init__(system)
+
+        self._update_option = update_option
 
         match update_option:
             case UpdateOption.last_state:
@@ -58,6 +75,8 @@ class SensitivityGradient(GradientComputer):
         return jax.vmap(self._compute_gradient, 0)(
             observed_true, assimilated
         ).mean(axis=0)
+
+    update_option = property(lambda self: self._update_option)
 
 
 def _compute_sensitivity(system: BaseSystem, assimilated: jndarray) -> jndarray:

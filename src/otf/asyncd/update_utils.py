@@ -2,8 +2,9 @@ from collections.abc import Callable
 
 from jax import numpy as jnp
 
+from .. import optim
 from ..optim import base
-from ..optim.parameter_update_option import UpdateOption
+from ..optim.gradient import sensitivity
 
 jndarray = jnp.ndarray
 
@@ -35,17 +36,21 @@ def get_update_function(
         and returns the updated parameter values.
 
     """
-    match optimizer.update_option:
-        case UpdateOption.last_state:
-            update = _last_state
-        case (
-            UpdateOption.mean_state
-            | UpdateOption.mean_gradient
-            | UpdateOption.adjoint
-        ):
-            update = _multiple_state
-        case _:
-            raise NotImplementedError("update option is not supported")
+    if isinstance(optimizer.gradient_computer, optim.SensitivityGradient):
+        match optimizer.gradient_computer.update_option:
+            case sensitivity.UpdateOption.last_state:
+                update = _last_state
+            case (
+                sensitivity.UpdateOption.mean_state
+                | sensitivity.UpdateOption.mean_gradient
+            ):
+                update = _multiple_state
+            case _:
+                raise NotImplementedError("update option is not supported")
+    elif isinstance(optimizer.gradient_computer, optim.AdjointGradient):
+        update = _multiple_state
+    else:
+        raise NotImplementedError("gradient computer is not supported")
 
     return update
 

@@ -136,7 +136,7 @@ class BaseOptimizer:
 
     # The following attributes are read-only.
     system = property(lambda self: self._system)
-    update_option = property(lambda self: self._gradient_computer.update_option)
+    gradient_computer = property(lambda self: self._gradient_computer)
 
 
 class PartialOptimizer(BaseOptimizer):

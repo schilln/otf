@@ -5,9 +5,8 @@ import jax
 from jax import numpy as jnp
 
 from ...system.base import BaseSystem, System_ModelUnknown
-from ..parameter_update_option import UpdateOption
-from .gradient_computer import GradientComputer
 from ...time_integration.base import MultistepSolver
+from .gradient_computer import GradientComputer
 
 jndarray = jnp.ndarray
 
@@ -19,7 +18,7 @@ class AdjointGradient(GradientComputer):
         solver: tuple[type[MultistepSolver]],
         dt: float,
     ):
-        super().__init__(system, UpdateOption.adjoint)
+        super().__init__(system)
 
         self._adjoint_system = AdjointSystem(system)
         if not isinstance(solver, tuple):
