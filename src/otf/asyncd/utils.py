@@ -113,15 +113,15 @@ def run_update(
     if optimizer is None:
         optimizer = opt.LevenbergMarquardt(system)
 
+    if assimilated0.ndim == 1:
+        assimilated0 = jnp.expand_dims(assimilated0, 0)
+
     cs = [system.cs]
     errors = []
-
-    assimilated_args = dict()
 
     if isinstance(assimilated_solver, ti_base.SinglestepSolver):
         k = 1
     elif isinstance(assimilated_solver, ti_base.MultistepSolver):
-        assimilated_args["start_with_multistep"] = True
         k = assimilated_solver.k
 
         if assimilated_solver.uses_multistage:
@@ -142,7 +142,7 @@ def run_update(
         )
 
     if return_all:
-        assimilateds = [np.expand_dims(assimilated0, 0)]
+        assimilateds = [assimilated0]
 
     match parameter_update_option:
         case ParameterUpdateOption.last_state:
@@ -163,14 +163,15 @@ def run_update(
     t0 = T0
     tf = t0 + t_relax
 
-    num_steps = assimilated_solver.compute_num_steps(t0, tf, dt)
-    end = num_steps
+    num_steps = assimilated_solver.compute_num_steps(t0, tf, dt) - 1
+    end = num_steps + 1
     assimilated, tls = assimilated_solver.solve_assimilated(
         assimilated0, t0, tf, dt, true_observed[:end]
     )
 
+    len0 = len(assimilated0)
     if return_all:
-        assimilateds.append(assimilated[1:])
+        assimilateds.append(assimilated[len0:])
 
     assimilated0 = assimilated[-k:]
 
@@ -196,26 +197,21 @@ def run_update(
 
     # Relative error
     errors.append(
-        norm(true_compare[1:end] - assimilated_compare(assimilated[1:]))
-        / norm(true_compare[1:end])
+        norm(true_compare[len0:end] - assimilated_compare(assimilated[len0:]))
+        / norm(true_compare[len0:end])
     )
 
-    start = end - 1
+    start = end
 
     while tf <= Tf:
-        num_steps = assimilated_solver.compute_num_steps(t0, tf, dt)
-        end += num_steps - (k - 1)
+        num_steps = assimilated_solver.compute_num_steps(t0, tf, dt) - 1
+        end += num_steps
         assimilated, tls = assimilated_solver.solve_assimilated(
-            assimilated0,
-            t0,
-            tf,
-            dt,
-            true_observed[start - k + 1 : end],
-            **assimilated_args,
+            assimilated0, t0, tf, dt, true_observed[start - k : end]
         )
 
         if return_all:
-            assimilateds.append(assimilated[assimilated_solver.k :])
+            assimilateds.append(assimilated[k:])
 
         assimilated0 = assimilated[-k:]
 
@@ -232,14 +228,11 @@ def run_update(
 
         # Relative error
         errors.append(
-            norm(
-                true_compare[start + 1 : end]
-                - assimilated_compare(assimilated[k:])
-            )
-            / norm(true_compare[start + 1 : end])
+            norm(true_compare[start:end] - assimilated_compare(assimilated[k:]))
+            / norm(true_compare[start:end])
         )
 
-        start = end - 1
+        start = end
 
     errors = np.array(errors)
 

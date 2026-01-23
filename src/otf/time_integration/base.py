@@ -72,11 +72,11 @@ class BaseSolver:
 
         # Store the solution at every step.
         state = jnp.full(
-            (num_steps, *state0.shape), jnp.inf, dtype=state0.dtype
+            (num_steps, state0.shape[-1]), jnp.inf, dtype=state0.dtype
         )
 
         # Set initial state.
-        state = state.at[0].set(state0)
+        state = state.at[: len(state0)].set(state0)
 
         return state, tls
 
@@ -189,6 +189,9 @@ class MultistageSolver(BaseSolver):
         tf: float,
         dt: float,
     ) -> tuple[jndarray, jndarray]:
+        if true0.ndim == 1:
+            true0 = jnp.expand_dims(true0, 0)
+
         true, tls = self._init_solve(true0, t0, tf, dt)
 
         true, _ = lax.fori_loop(1, len(true), self._step_true, (true, (dt,)))
@@ -203,6 +206,11 @@ class MultistageSolver(BaseSolver):
         tf: float,
         dt: float,
     ) -> tuple[jndarray, jndarray, jndarray]:
+        if true0.ndim == 1:
+            true0 = jnp.expand_dims(true0, 0)
+        if assimilated0.ndim == 1:
+            assimilated0 = jnp.expand_dims(assimilated0, 0)
+
         true, tls = self._init_solve(true0, t0, tf, dt)
         assimilated, _ = self._init_solve(assimilated0, t0, tf, dt)
 
@@ -278,6 +286,9 @@ class SinglestepSolver(BaseSolver):
             "`system` must be of type `System_ModelKnown`"
         )
 
+        if true0.ndim == 1:
+            true0 = jnp.expand_dims(true0, 0)
+
         true, tls = self._init_solve(true0, t0, tf, dt)
 
         true, _ = lax.fori_loop(1, len(true), self._step_true, (true, (dt,)))
@@ -326,6 +337,9 @@ class SinglestepSolver(BaseSolver):
         tls
             Array of time points
         """
+        if assimilated0.ndim == 1:
+            assimilated0 = jnp.expand_dims(assimilated0, 0)
+
         assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
 
         if len(true_observed) < len(assimilated):
@@ -465,12 +479,7 @@ class MultistepSolver(BaseSolver):
             return False
 
     def solve_true(
-        self,
-        true0: jndarray,
-        t0: float,
-        tf: float,
-        dt: float,
-        start_with_multistep: bool = False,
+        self, true0: jndarray, t0: float, tf: float, dt: float
     ) -> tuple[jndarray, jndarray]:
         """See documentation for `BaseSolver`.
 
@@ -478,23 +487,18 @@ class MultistepSolver(BaseSolver):
         ----------
         true0
             Initial state(s) of true system
-
-            If `start_with_multistep` is True, then `true0` should have shape
-            (k, ...) where k is the number of steps used in the multistep
-            solver, and the remaining dimensions are as usual (i.e., contain the
-            state at one step). The final entry of `true0` corresponds to `t0`,
-            while preceding entries `true0[-2]`, `true0[-3]`, ... correspond to
-            t0 - dt, t0 - 2*dt, ...
-        start_with_multistep
-            If true, use the first `self.k` states of `true0` as initial states.
         """
         assert isinstance(self.system, System_ModelKnown), (
             "`system` must be of type `System_ModelKnown`"
         )
 
-        # Don't have enough steps to use multistep solver, so use some other
-        # solver to start.
-        if not start_with_multistep:
+        if true0.ndim == 1:
+            true0 = jnp.expand_dims(true0, 0)
+
+        # Don't have enough steps to use this solver, so use
+        # self._pre_multistep_solver to start.
+        len0 = len(true0)
+        if len0 < self.k:
             true, tls = self._init_solve(true0, t0, tf, dt)
 
             # Need k-1 previous steps to use k-step solver.
@@ -504,32 +508,15 @@ class MultistepSolver(BaseSolver):
                 true0, t0, t0 + dt * (self.k - 1), dt
             )
 
-            true = true.at[1 : self.k].set(true0[1:])
-
-            true, _ = lax.fori_loop(
-                self.k, len(true), self._step_true, (true, (dt,))
-            )
-
-            return true, tls
+            true = true.at[len0 : len0 + self.k].set(true0)
         else:
-            assert true0.shape[0] == self.k, (
-                "the first dimension of `true0` should have shape equal to"
-                " `k`, the number of steps used in the solver"
-            )
+            true, tls = self._init_solve(true0, t0 - dt * (self.k - 1), tf, dt)
 
-            true, tls = self._init_solve(
-                true0[0],
-                t0 - dt * (self.k - 1),
-                tf,
-                dt,
-            )
-            true = true.at[1 : self.k].set(true0[1:])
+        true, _ = lax.fori_loop(
+            self.k, len(true), self._step_true, (true, (dt,))
+        )
 
-            true, _ = lax.fori_loop(
-                self.k, len(true), self._step_true, (true, (dt,))
-            )
-
-            return true, tls
+        return true, tls
 
     def solve_assimilated(
         self,
@@ -539,7 +526,6 @@ class MultistepSolver(BaseSolver):
         dt: float,
         true_observed: jndarray,
         ensure_optimized: bool = True,
-        start_with_multistep: bool = False,
     ) -> tuple[jndarray, jndarray]:
         """See documentation for `BaseSolver`.
 
@@ -547,27 +533,14 @@ class MultistepSolver(BaseSolver):
         ----------
         assimilated0
             Initial state(s) of data assimilated system
-
-            If `start_with_multistep` is True, then `assimilated0` should have
-            shape (k, ...) where k is the number of steps used in the multistep
-            solver, and the remaining dimensions are as usual (i.e., contain the
-            state at one step). The final entry of `assimilated0` corresponds to
-            `t0`, while preceding entries `assimilated0[-2]`,
-            `assimilated0[-3]`, ... correspond to t0 - dt, t0 - 2*dt, ...
         true_observed
             Observed true states
 
-            First entries should align with `assimilated0`. For example, if
-            `start_with_multistep` is True and this solver uses k = 2 steps,
-            then `true_observed[0]` should correspond to t0 - dt and
-            `true_observed[1]` should correspond to t0.
+            First entries should align with `assimilated0`.
         ensure_optimized
             If True, check whether `true_observed` is the exact length for the
             number of integration steps, raising a ValueError if `true_observed`
             contains too many states. See Notes section.
-        start_with_multistep
-            If true, use the first `self.k` states of `assimilated0` as initial
-            states.
 
         Notes
         -----
@@ -589,20 +562,14 @@ class MultistepSolver(BaseSolver):
         tls
             Array of time points
         """
-        # Don't have enough steps to use multistep solver, so use some other
-        # solver to start.
-        if not start_with_multistep:
-            assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
+        if assimilated0.ndim == 1:
+            assimilated0 = jnp.expand_dims(assimilated0, 0)
 
-            if len(true_observed) < len(assimilated):
-                raise IndexError("too few `true_observed` states given")
-            if ensure_optimized:
-                if len(true_observed) > len(assimilated):
-                    raise ValueError(
-                        "too many `true_observed` states given; either pass"
-                        " `ensure_optimized = False` or pass the exact number"
-                        " of `true_observed` states for the time interval"
-                    )
+        # Don't have enough steps to use this solver, so use
+        # self._pre_multistep_solver to start.
+        len0 = len(assimilated0)
+        if len0 < self.k:
+            assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
 
             # Need k-1 previous steps to use k-step solver.
             # The time span is [t0, t0 + dt, ..., t0 + dt * (k-1)],
@@ -615,55 +582,33 @@ class MultistepSolver(BaseSolver):
                 true_observed[: self.k],
             )
 
-            assimilated = assimilated.at[1 : self.k].set(assimilated0[1:])
-
-            assimilated, _ = lax.fori_loop(
-                self.k,
-                len(assimilated),
-                self._step_assimilated,
-                (
-                    assimilated,
-                    (dt, self.system.cs, true_observed[: len(assimilated)]),
-                ),
-            )
-
-            return assimilated, tls
+            assimilated = assimilated.at[len0 : len0 + self.k].set(assimilated0)
         else:
-            assert assimilated0.shape[0] == self.k, (
-                "the first dimension of `assimilated0` should have shape equal"
-                " to `k`, the number of steps used in the solver"
-            )
-
             assimilated, tls = self._init_solve(
-                assimilated0[0],
-                t0 - dt * (self.k - 1),
-                tf,
-                dt,
+                assimilated0, t0 - dt * (self.k - 1), tf, dt
             )
 
-            if len(true_observed) < len(assimilated):
-                raise IndexError("too few `true_observed` states given")
-            if ensure_optimized:
-                if len(true_observed) > len(assimilated):
-                    raise ValueError(
-                        "too many `true_observed` states given; either pass"
-                        " `ensure_optimized = False` or pass the exact number"
-                        " of `true_observed` states for the time interval"
-                    )
+        if len(true_observed) < len(assimilated):
+            raise IndexError("too few `true_observed` states given")
+        if ensure_optimized:
+            if len(true_observed) > len(assimilated):
+                raise ValueError(
+                    "too many `true_observed` states given; either pass"
+                    " `ensure_optimized = False` or pass the exact number"
+                    " of `true_observed` states for the time interval"
+                )
 
-            assimilated = assimilated.at[1 : self.k].set(assimilated0[1:])
+        assimilated, _ = lax.fori_loop(
+            self.k,
+            len(assimilated),
+            self._step_assimilated,
+            (
+                assimilated,
+                (dt, self.system.cs, true_observed[: len(assimilated)]),
+            ),
+        )
 
-            assimilated, _ = lax.fori_loop(
-                self.k,
-                len(assimilated),
-                self._step_assimilated,
-                (
-                    assimilated,
-                    (dt, self.system.cs, true_observed[: len(assimilated)]),
-                ),
-            )
-
-            return assimilated, tls
+        return assimilated, tls
 
     def solve(
         self,
@@ -672,9 +617,9 @@ class MultistepSolver(BaseSolver):
         t0: float,
         tf: float,
         dt: float,
-        start_with_multistep: bool = False,
     ) -> tuple[jndarray, jndarray, jndarray]:
-        if not start_with_multistep and isinstance(
+        len0 = len(assimilated0)
+        if len0 < self.k and isinstance(
             self._pre_multistep_solver, MultistageSolver
         ):
             # Need k-1 previous steps to use k-step solver.
@@ -685,18 +630,10 @@ class MultistepSolver(BaseSolver):
             )
 
             t0 = t0 + dt * (self.k - 1)
-            start_with_multistep = True
 
-        true, tls = self.solve_true(
-            true0, t0, tf, dt, start_with_multistep=start_with_multistep
-        )
+        true, tls = self.solve_true(true0, t0, tf, dt)
         assimilated, _ = self.solve_assimilated(
-            assimilated0,
-            t0,
-            tf,
-            dt,
-            true[:, self.system.true_observed_mask],
-            start_with_multistep=start_with_multistep,
+            assimilated0, t0, tf, dt, true[:, self.system.true_observed_mask]
         )
 
         return true, assimilated, tls

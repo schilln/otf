@@ -284,14 +284,7 @@ def _run_update_multistep(
     )
 
     while tf <= Tf:
-        true, assimilated, tls = solver.solve(
-            true0,
-            assimilated0,
-            t0,
-            tf,
-            dt,
-            start_with_multistep=True,
-        )
+        true, assimilated, tls = solver.solve(true0, assimilated0, t0, tf, dt)
 
         true0, assimilated0 = true[-solver.k :], assimilated[-solver.k :]
 
