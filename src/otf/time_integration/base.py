@@ -289,6 +289,12 @@ class SinglestepSolver(BaseSolver):
         if true0.ndim == 1:
             true0 = jnp.expand_dims(true0, 0)
 
+        len0 = len(true0)
+        if len0 > 1:
+            raise ValueError(
+                "too many initial states given; should contain 1 or fewer"
+            )
+
         true, tls = self._init_solve(true0, t0, tf, dt)
 
         true, _ = lax.fori_loop(1, len(true), self._step_true, (true, (dt,)))
@@ -339,6 +345,12 @@ class SinglestepSolver(BaseSolver):
         """
         if assimilated0.ndim == 1:
             assimilated0 = jnp.expand_dims(assimilated0, 0)
+
+        len0 = len(assimilated0)
+        if len0 > 1:
+            raise ValueError(
+                "too many initial states given; should contain 1 or fewer"
+            )
 
         assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
 
@@ -498,24 +510,33 @@ class MultistepSolver(BaseSolver):
         len0 = len(true0)
         if len0 > self.k:
             raise ValueError(
-                "too many initial states given"
+                "too many initial states given;"
                 f" should contain `self.k` ({self.k}) or fewer"
             )
+
+        true, tls = self._init_solve(true0, t0, tf, dt)
+
         # Don't have enough steps to use this solver, so use
         # self._pre_multistep_solver to start.
         if len0 < self.k:
-            true, tls = self._init_solve(true0, t0, tf, dt)
-
-            # Need k-1 previous steps to use k-step solver.
-            # The time span is [t0, t0 + dt, ..., t0 + dt * (k-1)],
-            # for a total of k steps.
-            true0, _ = self._pre_multistep_solver.solve_true(
-                true0, t0, t0 + dt * (self.k - 1), dt
+            pre_k = (
+                self._pre_multistep_solver.k
+                if isinstance(self._pre_multistep_solver, MultistepSolver)
+                else 1
             )
-
-            true = true.at[len0 : len0 + self.k].set(true0)
-        else:
-            true, tls = self._init_solve(true0, t0 - dt * (self.k - 1), tf, dt)
+            if len0 <= pre_k:
+                true0, _ = self._pre_multistep_solver.solve_true(
+                    true0, t0, t0 + dt * (self.k - 1), dt
+                )
+                true = true.at[len0 : self.k].set(true0[len0:])
+            else:
+                true0, _ = self._pre_multistep_solver.solve_true(
+                    true0[-pre_k:],
+                    t0 + dt * (self.k - 1 - pre_k),
+                    t0 + dt * (self.k - 1),
+                    dt,
+                )
+                true = true.at[len0 : self.k].set(true0[pre_k:])
 
         true, _ = lax.fori_loop(
             self.k, len(true), self._step_true, (true, (dt,))
@@ -573,30 +594,42 @@ class MultistepSolver(BaseSolver):
         len0 = len(assimilated0)
         if len0 > self.k:
             raise ValueError(
-                "too many initial states given"
+                "too many initial states given;"
                 f" should contain `self.k` ({self.k}) or fewer"
             )
+
+        assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
+
         # Don't have enough steps to use this solver, so use
         # self._pre_multistep_solver to start.
         if len0 < self.k:
-            assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
-
-            # Need k-1 previous steps to use k-step solver.
-            # The time span is [t0, t0 + dt, ..., t0 + dt * (k-1)],
-            # for a total of k steps.
-            assimilated0, _ = self._pre_multistep_solver.solve_assimilated(
-                assimilated0,
-                t0,
-                t0 + dt * (self.k - 1),
-                dt,
-                true_observed[: self.k],
+            pre_k = (
+                self._pre_multistep_solver.k
+                if isinstance(self._pre_multistep_solver, MultistepSolver)
+                else 1
             )
-
-            assimilated = assimilated.at[len0 : len0 + self.k].set(assimilated0)
-        else:
-            assimilated, tls = self._init_solve(
-                assimilated0, t0 - dt * (self.k - 1), tf, dt
-            )
+            if len0 <= pre_k:
+                assimilated0, _ = self._pre_multistep_solver.solve_assimilated(
+                    assimilated0,
+                    t0,
+                    t0 + dt * (self.k - 1),
+                    dt,
+                    true_observed[: self.k],
+                )
+                assimilated = assimilated.at[len0 : self.k].set(
+                    assimilated0[len0:]
+                )
+            else:
+                assimilated0, _ = self._pre_multistep_solver.solve_assimilated(
+                    assimilated0[-pre_k:],
+                    t0 + dt * (self.k - 1 - pre_k),
+                    t0 + dt * (self.k - 1),
+                    dt,
+                    true_observed[self.k - 1 - pre_k : self.k],
+                )
+                assimilated = assimilated.at[len0 : self.k].set(
+                    assimilated0[pre_k:]
+                )
 
         if len(true_observed) < len(assimilated):
             raise IndexError("too few `true_observed` states given")
