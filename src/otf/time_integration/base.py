@@ -495,9 +495,14 @@ class MultistepSolver(BaseSolver):
         if true0.ndim == 1:
             true0 = jnp.expand_dims(true0, 0)
 
+        len0 = len(true0)
+        if len0 > self.k:
+            raise ValueError(
+                "too many initial states given"
+                f" should contain `self.k` ({self.k}) or fewer"
+            )
         # Don't have enough steps to use this solver, so use
         # self._pre_multistep_solver to start.
-        len0 = len(true0)
         if len0 < self.k:
             true, tls = self._init_solve(true0, t0, tf, dt)
 
@@ -565,9 +570,14 @@ class MultistepSolver(BaseSolver):
         if assimilated0.ndim == 1:
             assimilated0 = jnp.expand_dims(assimilated0, 0)
 
+        len0 = len(assimilated0)
+        if len0 > self.k:
+            raise ValueError(
+                "too many initial states given"
+                f" should contain `self.k` ({self.k}) or fewer"
+            )
         # Don't have enough steps to use this solver, so use
         # self._pre_multistep_solver to start.
-        len0 = len(assimilated0)
         if len0 < self.k:
             assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
 
