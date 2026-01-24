@@ -113,15 +113,15 @@ def run_update(
     if optimizer is None:
         optimizer = opt.LevenbergMarquardt(system)
 
+    if assimilated0.ndim == 1:
+        assimilated0 = jnp.expand_dims(assimilated0, 0)
+
     cs = [system.cs]
     errors = []
-
-    assimilated_args = dict()
 
     if isinstance(assimilated_solver, ti_base.SinglestepSolver):
         k = 1
     elif isinstance(assimilated_solver, ti_base.MultistepSolver):
-        assimilated_args["start_with_multistep"] = True
         k = assimilated_solver.k
 
         if assimilated_solver.uses_multistage:
@@ -142,7 +142,7 @@ def run_update(
         )
 
     if return_all:
-        assimilateds = [np.expand_dims(assimilated0, 0)]
+        assimilateds = [assimilated0]
 
     match parameter_update_option:
         case ParameterUpdateOption.last_state:
@@ -163,20 +163,24 @@ def run_update(
     t0 = T0
     tf = t0 + t_relax
 
-    num_steps = assimilated_solver.compute_num_steps(t0, tf, dt)
-    end = num_steps
+    start = len0 = len(assimilated0)
+
+    num_steps = assimilated_solver.compute_num_steps(t0, tf, dt) - len0
+    end = len0 + num_steps
     assimilated, tls = assimilated_solver.solve_assimilated(
         assimilated0, t0, tf, dt, true_observed[:end]
     )
 
     if return_all:
-        assimilateds.append(assimilated[1:])
+        assimilateds.append(assimilated[len0:])
 
     assimilated0 = assimilated[-k:]
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = update(optimizer, true_observed, assimilated, 0, end, 1)
+        system.cs = update(
+            optimizer, true_observed[start:end], assimilated[start:]
+        )
         lr_scheduler.step()
     cs.append(system.cs)
 
@@ -196,33 +200,32 @@ def run_update(
 
     # Relative error
     errors.append(
-        norm(true_compare[1:end] - assimilated_compare(assimilated[1:]))
-        / norm(true_compare[1:end])
+        norm(true_compare[start:end] - assimilated_compare(assimilated[start:]))
+        / norm(true_compare[start:end])
     )
 
-    start = end - 1
+    start = end
 
     while tf <= Tf:
-        num_steps = assimilated_solver.compute_num_steps(t0, tf, dt)
-        end += num_steps - (k - 1)
+        num_steps = assimilated_solver.compute_num_steps(t0, tf, dt) - 1
+        end += num_steps
         assimilated, tls = assimilated_solver.solve_assimilated(
             assimilated0,
-            t0,
+            t0 - dt * (k - 1),
             tf,
             dt,
-            true_observed[start - k + 1 : end],
-            **assimilated_args,
+            true_observed[start - k : end],
         )
 
         if return_all:
-            assimilateds.append(assimilated[assimilated_solver.k :])
+            assimilateds.append(assimilated[k:])
 
         assimilated0 = assimilated[-k:]
 
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
             system.cs = update(
-                optimizer, true_observed, assimilated, start, end, k
+                optimizer, true_observed[start:end], assimilated[k:]
             )
             lr_scheduler.step()
         cs.append(system.cs)
@@ -232,14 +235,11 @@ def run_update(
 
         # Relative error
         errors.append(
-            norm(
-                true_compare[start + 1 : end]
-                - assimilated_compare(assimilated[k:])
-            )
-            / norm(true_compare[start + 1 : end])
+            norm(true_compare[start:end] - assimilated_compare(assimilated[k:]))
+            / norm(true_compare[start:end])
         )
 
-        start = end - 1
+        start = end
 
     errors = np.array(errors)
 
@@ -258,41 +258,27 @@ def update_last_state(
     optimizer: optim_base.BaseOptimizer,
     true_observed: jndarray,
     assimilated: jndarray,
-    start: int,
-    end: int,
-    k: int,
 ) -> jndarray:
-    return optimizer(true_observed[end - 1], assimilated[-1])
+    return optimizer(true_observed[-1], assimilated[-1])
 
 
 def update_mean_state(
     optimizer: optim_base.BaseOptimizer,
     true_observed: jndarray,
     assimilated: jndarray,
-    start: int,
-    end: int,
-    k: int,
 ) -> jndarray:
-    return optimizer(
-        true_observed[start - k + 2 : end].mean(axis=0),
-        assimilated[1:].mean(axis=0),
-    )
+    return optimizer(true_observed.mean(axis=0), assimilated.mean(axis=0))
 
 
 def update_mean_derivative(
     optimizer: optim_base.BaseOptimizer,
     true_observed: jndarray,
     assimilated: jndarray,
-    start: int,
-    end: int,
-    k: int,
 ) -> jndarray:
     mean_gradient = jax.vmap(optimizer.compute_gradient, 0)(
-        true_observed[start - k + 2 : end], assimilated[1:]
+        true_observed, assimilated
     ).mean(axis=0)
     step = optimizer.step_from_gradient(
-        mean_gradient,
-        true_observed[start - k + 2 : end].mean(axis=0),
-        assimilated[1:].mean(axis=0),
+        mean_gradient, true_observed.mean(axis=0), assimilated.mean(axis=0)
     )
     return optimizer.system.cs + step
