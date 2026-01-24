@@ -600,6 +600,16 @@ class MultistepSolver(BaseSolver):
 
         assimilated, tls = self._init_solve(assimilated0, t0, tf, dt)
 
+        if len(true_observed) < len(assimilated):
+            raise IndexError("too few `true_observed` states given")
+        if ensure_optimized:
+            if len(true_observed) > len(assimilated):
+                raise ValueError(
+                    "too many `true_observed` states given; either pass"
+                    " `ensure_optimized = False` or pass the exact number"
+                    " of `true_observed` states for the time interval"
+                )
+
         # Don't have enough steps to use this solver, so use
         # self._pre_multistep_solver to start.
         if len0 < self.k:
@@ -629,16 +639,6 @@ class MultistepSolver(BaseSolver):
                 )
                 assimilated = assimilated.at[len0 : self.k].set(
                     assimilated0[pre_k:]
-                )
-
-        if len(true_observed) < len(assimilated):
-            raise IndexError("too few `true_observed` states given")
-        if ensure_optimized:
-            if len(true_observed) > len(assimilated):
-                raise ValueError(
-                    "too many `true_observed` states given; either pass"
-                    " `ensure_optimized = False` or pass the exact number"
-                    " of `true_observed` states for the time interval"
                 )
 
         assimilated, _ = lax.fori_loop(
