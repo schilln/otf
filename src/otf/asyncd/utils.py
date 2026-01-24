@@ -149,8 +149,9 @@ def run_update(
     t0 = T0
     tf = t0 + t_relax
 
-    len0 = len(assimilated0)
-    num_steps = assimilated_solver.compute_num_steps(t0, tf, dt) - 1
+    start = len0 = len(assimilated0)
+
+    num_steps = assimilated_solver.compute_num_steps(t0, tf, dt) - len0
     end = len0 + num_steps
     assimilated, tls = assimilated_solver.solve_assimilated(
         assimilated0, t0, tf, dt, true_observed[:end]
@@ -163,7 +164,9 @@ def run_update(
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = update(optimizer, true_observed, assimilated, 0, end, 1)
+        system.cs = update(
+            optimizer, true_observed[start:end], assimilated[start:]
+        )
         lr_scheduler.step()
     cs.append(system.cs)
 
@@ -183,8 +186,8 @@ def run_update(
 
     # Relative error
     errors.append(
-        norm(true_compare[len0:end] - assimilated_compare(assimilated[len0:]))
-        / norm(true_compare[len0:end])
+        norm(true_compare[start:end] - assimilated_compare(assimilated[start:]))
+        / norm(true_compare[start:end])
     )
 
     start = end
@@ -193,7 +196,11 @@ def run_update(
         num_steps = assimilated_solver.compute_num_steps(t0, tf, dt) - 1
         end += num_steps
         assimilated, tls = assimilated_solver.solve_assimilated(
-            assimilated0, t0, tf, dt, true_observed[start - k : end]
+            assimilated0,
+            t0 - dt * (k - 1),
+            tf,
+            dt,
+            true_observed[start - k : end],
         )
 
         if return_all:
@@ -204,7 +211,7 @@ def run_update(
         # Update parameters
         if t_begin_updates is None or t_begin_updates <= tf:
             system.cs = update(
-                optimizer, true_observed, assimilated, start, end, k
+                optimizer, true_observed[start:end], assimilated[k:]
             )
             lr_scheduler.step()
         cs.append(system.cs)

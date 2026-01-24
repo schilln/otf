@@ -59,23 +59,15 @@ def _last_state(
     optimizer: base.BaseOptimizer,
     true_observed: jndarray,
     assimilated: jndarray,
-    start: int,
-    end: int,
-    num_multistep: int,
 ) -> jndarray:
     # Taking a slice of one item instead of just indexing (e.g., array[-1])
     # preserves the number of dimension of the resulting array (i.e., 2D).
-    return optimizer(true_observed[end - 1 : end], assimilated[-1:])
+    return optimizer(true_observed[-1:], assimilated[-1:])
 
 
 def _multiple_state(
     optimizer: base.BaseOptimizer,
     true_observed: jndarray,
     assimilated: jndarray,
-    start: int,
-    end: int,
-    num_multistep: int,
 ) -> jndarray:
-    return optimizer(
-        true_observed[start - num_multistep + 2 : end], assimilated[1:]
-    )
+    return optimizer(true_observed, assimilated)
