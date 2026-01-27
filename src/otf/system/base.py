@@ -20,7 +20,6 @@ class BaseSystem:
     def __init__(
         self,
         mu: float,
-        gs: jndarray,
         cs: jndarray,
         observed_mask: jndarray,
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
@@ -33,8 +32,6 @@ class BaseSystem:
         ----------
         mu
             Nudging parameter
-        gs
-            Parameter values to be used by the "true" system
         cs
             Estimated parameter values to be used by the data assimilate system,
             to be estimated/optimized (may or may not correspond to `gs`)
@@ -64,7 +61,6 @@ class BaseSystem:
             )
 
         self._mu = mu
-        self._gs = gs
         self._observed_mask = observed_mask
         self._unobserved_mask = ~observed_mask
         self._observe_all = not jnp.any(self._unobserved_mask)
@@ -190,6 +186,8 @@ class System_ModelKnown(BaseSystem):
         ----------
         See `BaseSystem` for other parameter definitions.
 
+        gs
+            Parameter values to be used by the "true" system
         true_ode
             Function that computes the time derivative of the true state
             Parameters: (gs, true)
@@ -199,7 +197,6 @@ class System_ModelKnown(BaseSystem):
         """
         super().__init__(
             mu,
-            gs,
             cs,
             observed_mask,
             assimilated_ode,
@@ -207,6 +204,7 @@ class System_ModelKnown(BaseSystem):
             use_unobserved_asymptotics,
         )
 
+        self._gs = gs
         self._true_ode = true_ode
         self._true_observed_mask = (
             true_observed_mask
