@@ -21,9 +21,13 @@ jndarray = jnp.ndarray
 
 
 class DummyOptimizer(BaseOptimizer):
-    def __init__(self, system: BaseSystem):
+    def __init__(
+        self,
+        system: BaseSystem,
+        gradient_computer: gradient.GradientComputer | None = None,
+    ):
         """Don't perform parameter updates."""
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         return jnp.zeros_like(self.system.cs)
@@ -35,7 +39,12 @@ class DummyOptimizer(BaseOptimizer):
 
 
 class GradientDescent(BaseOptimizer):
-    def __init__(self, system: BaseSystem, learning_rate: float = 1e-4):
+    def __init__(
+        self,
+        system: BaseSystem,
+        learning_rate: float = 1e-4,
+        gradient_computer: gradient.GradientComputer | None = None,
+    ):
         """Perform gradient descent.
 
         See documentation of `Optimizer`.
@@ -45,7 +54,7 @@ class GradientDescent(BaseOptimizer):
         learning_rate
             The learning rate to use in gradient descent
         """
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
         self.learning_rate = learning_rate
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
@@ -60,7 +69,11 @@ class GradientDescent(BaseOptimizer):
 
 class WeightedLevenbergMarquardt(BaseOptimizer):
     def __init__(
-        self, system: BaseSystem, learning_rate: float = 1e-3, lam: float = 1e-2
+        self,
+        system: BaseSystem,
+        learning_rate: float = 1e-3,
+        lam: float = 1e-2,
+        gradient_computer: gradient.GradientComputer | None = None,
     ):
         """Perform a weighted version of the Levenberg–Marquardt modification of
         Gauss–Newton.
@@ -72,7 +85,7 @@ class WeightedLevenbergMarquardt(BaseOptimizer):
         lam
             Levenberg–Marquardt parameter
         """
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
         self.learning_rate = learning_rate
         self.lam = lam
 
@@ -94,7 +107,11 @@ class WeightedLevenbergMarquardt(BaseOptimizer):
 
 class LevenbergMarquardt(BaseOptimizer):
     def __init__(
-        self, system: BaseSystem, learning_rate: float = 1e-3, lam: float = 1e-2
+        self,
+        system: BaseSystem,
+        learning_rate: float = 1e-3,
+        lam: float = 1e-2,
+        gradient_computer: gradient.GradientComputer | None = None,
     ):
         """Perform the Levenberg–Marquardt modification of Gauss–Newton.
 
@@ -105,7 +122,7 @@ class LevenbergMarquardt(BaseOptimizer):
         lam
             Levenberg–Marquardt parameter
         """
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
         self.learning_rate = learning_rate
         self.lam = lam
 

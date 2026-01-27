@@ -56,6 +56,8 @@ class BaseOptimizer:
         system
             Instance of `System` whose unknown parameters (`system.cs`) are to
             be optimized
+        gradient_computer
+            Instance of `optim.gradient.GradientComputer`
 
         Methods
         -------
