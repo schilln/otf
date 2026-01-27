@@ -158,7 +158,7 @@ def _compute_adjoint_asymptotic(
 class AdjointSystem(System_ModelUnknown):
     def __init__(self, system: BaseSystem):
         super().__init__(
-            None, None, None, system.observed_mask, system.assimilated_ode
+            None, None, system.observed_mask, system.assimilated_ode
         )
         self._system = system
 
