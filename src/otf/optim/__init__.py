@@ -1,8 +1,13 @@
+from . import gradient
 from .base import (
     OptimizerChain,
     PartialOptimizer,
     Regularizer,
     pruned_factory,
+)
+from .gradient import (
+    AdjointGradient,
+    SensitivityGradient,
 )
 from .lr_scheduler import (
     DummyLRScheduler,
@@ -18,9 +23,11 @@ from .optimizer import (
 )
 
 __all__ = [
+    "AdjointGradient",
     "DummyLRScheduler",
     "DummyOptimizer",
     "ExponentialLR",
+    "gradient",
     "GradientDescent",
     "LevenbergMarquardt",
     "MultiStepLR",
@@ -29,5 +36,6 @@ __all__ = [
     "PartialOptimizer",
     "pruned_factory",
     "Regularizer",
+    "SensitivityGradient",
     "WeightedLevenbergMarquardt",
 ]

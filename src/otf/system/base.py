@@ -5,7 +5,6 @@ OTF in addition estimates the model governing the observed system.
 """
 
 from collections.abc import Callable
-from functools import partial
 
 import jax
 from jax import numpy as jnp
@@ -55,10 +54,6 @@ class BaseSystem:
         -------
         f_assimilated
             Computes the time derivative of the data assimilated state.
-        compute_w
-            Computes the leading-order approximation of the sensitivity
-            equations.
-            May be overridden (see docstring).
         """
         if not isinstance(observed_mask, jndarray):
             raise ValueError(
@@ -73,6 +68,35 @@ class BaseSystem:
         self._assimilated_ode = assimilated_ode
 
         self._complex_differentiation = complex_differentiation
+
+        _df_dc = jax.jacrev(
+            self.assimilated_ode,
+            0,
+            holomorphic=self._complex_differentiation,
+        )
+        _df_dv = jax.jacrev(
+            self.assimilated_ode,
+            1,
+            holomorphic=self._complex_differentiation,
+        )
+        if self._complex_differentiation:
+
+            def df_dc(cs: jndarray, assimilated: jndarray) -> jndarray:
+                return _df_dc(cs.astype(complex), assimilated)
+
+            def df_dv(cs: jndarray, assimilated: jndarray) -> jndarray:
+                return _df_dv(cs.astype(complex), assimilated)
+        else:
+
+            def df_dc(cs: jndarray, assimilated: jndarray) -> jndarray:
+                return _df_dc(cs, assimilated)
+
+            def df_dv(cs: jndarray, assimilated: jndarray) -> jndarray:
+                return _df_dv(cs, assimilated)
+
+        self._df_dc = df_dc
+        self._df_dv = df_dv
+
         self._use_unobserved_asymptotics = use_unobserved_asymptotics
 
     def f_assimilated(
@@ -110,66 +134,6 @@ class BaseSystem:
 
         return assimilated_p
 
-    def compute_w(self, assimilated: jndarray) -> jndarray:
-        """Compute the leading-order approximation of the sensitivity equations.
-
-        Subclasses may override this method to optimize computation or to obtain
-        higher-order approximations.
-
-        Parameters
-        ----------
-        assimilated
-            Data assimilated system state
-
-        Returns
-        -------
-        W
-            The ith column corresponds to the asymptotic approximation of the
-            ith sensitivity (i.e., w_i = dv/dc_i corresponding to the ith
-            unknown parameter c_i)
-        """
-        return self._compute_w(self.cs, assimilated)
-
-    @partial(jax.jit, static_argnames="self")
-    def _compute_w(self, cs: jndarray, assimilated: jndarray) -> jndarray:
-        om = self.observed_mask
-
-        df_dc = jax.jacrev(
-            self._assimilated_ode,
-            0,
-            holomorphic=self.complex_differentiation,
-        )(
-            cs.astype(complex) if self.complex_differentiation else cs,
-            assimilated,
-        )
-
-        if self._observe_all:
-            return df_dc / self.mu
-        elif not self._use_unobserved_asymptotics:
-            return df_dc[om] / self.mu
-        else:
-            df_dv_QW0 = self._solve_unobserved(cs, assimilated, df_dc)
-            return (df_dc[om] + df_dv_QW0[om]) / self.mu
-
-    @partial(jax.jit, static_argnames="self")
-    def _solve_unobserved(
-        self, cs: jndarray, assimilated: jndarray, df_dc: jndarray
-    ) -> jndarray:
-        um = self.unobserved_mask
-
-        df_dv = jax.jacrev(
-            self._assimilated_ode,
-            1,
-            holomorphic=self.complex_differentiation,
-        )(
-            cs.astype(complex) if self.complex_differentiation else cs,
-            assimilated,
-        )
-
-        QW0 = jnp.linalg.lstsq(df_dv[um][:, um], -df_dc[um])[0]
-
-        return df_dv[:, um] @ QW0
-
     def _set_cs(self, cs):
         self._cs = cs
 
@@ -179,8 +143,15 @@ class BaseSystem:
     cs = property(lambda self: self._cs, _set_cs)
     observed_mask = property(lambda self: self._observed_mask)
     unobserved_mask = property(lambda self: self._unobserved_mask)
+    observe_all = property(lambda self: self._observe_all)
+    assimilated_ode = property(lambda self: self._assimilated_ode)
+    df_dc = property(lambda self: self._df_dc)
+    df_dv = property(lambda self: self._df_dv)
     complex_differentiation = property(
         lambda self: self._complex_differentiation
+    )
+    use_unobserved_asymptotics = property(
+        lambda self: self._use_unobserved_asymptotics
     )
 
 

@@ -1,0 +1,70 @@
+from collections.abc import Callable
+
+from jax import numpy as jnp
+
+from .. import optim
+from ..optim import base
+from ..optim.gradient import sensitivity
+
+jndarray = jnp.ndarray
+
+
+def get_update_function(
+    optimizer: base.BaseOptimizer | Callable[[jndarray, jndarray], jndarray],
+) -> Callable[[base.BaseOptimizer, jndarray, jndarray], jndarray]:
+    """Returns a function to update parameters.
+
+    Parameters
+    ----------
+    optimizer
+
+    Returns
+    -------
+    update
+        Function that takes
+
+        - an optimizer,
+        - true observed values,
+        - data assimilated values,
+
+        and returns the updated parameter values.
+
+    """
+    if not hasattr(optimizer, "gradient_computer"):
+        # Optimizer is a callable without a gradient_computer attribute
+        update = _multiple_state
+    elif isinstance(optimizer.gradient_computer, optim.SensitivityGradient):
+        match optimizer.gradient_computer.update_option:
+            case sensitivity.UpdateOption.last_state:
+                update = _last_state
+            case (
+                sensitivity.UpdateOption.mean_state
+                | sensitivity.UpdateOption.mean_gradient
+            ):
+                update = _multiple_state
+            case _:
+                raise NotImplementedError("update option is not supported")
+    elif isinstance(optimizer.gradient_computer, optim.AdjointGradient):
+        update = _multiple_state
+    else:
+        raise NotImplementedError("gradient computer is not supported")
+
+    return update
+
+
+def _last_state(
+    optimizer: base.BaseOptimizer,
+    true_observed: jndarray,
+    assimilated: jndarray,
+) -> jndarray:
+    # Taking a slice of one item instead of just indexing (e.g., array[-1])
+    # preserves the number of dimension of the resulting array (i.e., 2D).
+    return optimizer(true_observed[-1:], assimilated[-1:])
+
+
+def _multiple_state(
+    optimizer: base.BaseOptimizer | Callable[[jndarray, jndarray], jndarray],
+    true_observed: jndarray,
+    assimilated: jndarray,
+) -> jndarray:
+    return optimizer(true_observed, assimilated)

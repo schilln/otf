@@ -31,12 +31,17 @@ import numpy as np
 from jax import numpy as jnp
 
 from ..system.base import BaseSystem
+from . import gradient
 
 jndarray = jnp.ndarray
 
 
 class BaseOptimizer:
-    def __init__(self, system: BaseSystem):
+    def __init__(
+        self,
+        system: BaseSystem,
+        gradient_computer: gradient.GradientComputer | None = None,
+    ):
         """Abstract base class for optimizers of `System`s to compute updated
         parameter values.
 
@@ -51,6 +56,8 @@ class BaseOptimizer:
         system
             Instance of `System` whose unknown parameters (`system.cs`) are to
             be optimized
+        gradient_computer
+            Instance of `optim.gradient.GradientComputer`
 
         Methods
         -------
@@ -67,8 +74,13 @@ class BaseOptimizer:
         ----------------
         step
         """
+        if gradient_computer is None:
+            gradient_computer = gradient.SensitivityGradient(system)
+
         self._system = system
         self._weight = None
+        self._gradient_computer = gradient_computer
+        self.compute_gradient = self._gradient_computer.compute_gradient
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         """Compute the step to take to update the parameters of `system`.
@@ -124,48 +136,9 @@ class BaseOptimizer:
         """
         return self.system.cs + self.step(observed_true, nudged)
 
-    def compute_gradient(
-        self, observed_true: jndarray, nudged: jndarray
-    ) -> jndarray:
-        """Compute the derivative of the error with respect to each parameter,
-        as in (2.8) of Josh's thesis.
-
-        Note this differs from (2.8) in that it handles complex-valued true and
-        nudged states.
-        """
-        diff = nudged[self.system.observed_mask] - observed_true
-        w = self.system.compute_w(nudged)
-        m = w.shape[1]
-        if self._weight is None:
-            gradient = diff @ w.reshape(-1, m).conj()
-        else:
-            gradient = diff @ self._weight @ w.reshape(-1, m).conj()
-        return gradient if self.system.cs.dtype == complex else gradient.real
-
-    def set_weight(self, weight: jndarray | None):
-        """Weight the error using a (positive definite) matrix.
-
-        Use this matrix to weight the error (defined as the two-norm of the
-        difference between the data assimilated system state and the observed
-        portion of true system state). This accordingly weights the derivative
-        of the error with respect to the unknown parameters of the data
-        assimilated system.
-
-        If assimilating a system with noisy measurements, it is common to use
-        the *inverse* of the covariance matrix as the weight.
-
-        Parameters
-        ----------
-        weight
-            Square array. Each dimension should be equal to the number of
-            observed variables. Pass `None` to unset the weight (equivalently,
-            set the weight to the identity).
-        """
-        self._weight = weight
-
     # The following attributes are read-only.
     system = property(lambda self: self._system)
-    weight = property(lambda self: self._weight)
+    gradient_computer = property(lambda self: self._gradient_computer)
 
 
 class PartialOptimizer(BaseOptimizer):

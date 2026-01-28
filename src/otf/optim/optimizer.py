@@ -13,15 +13,21 @@ import optax
 from jax import numpy as jnp
 
 from ..system.base import BaseSystem
+from . import gradient
 from .base import BaseOptimizer
+from .gradient import sensitivity
 
 jndarray = jnp.ndarray
 
 
 class DummyOptimizer(BaseOptimizer):
-    def __init__(self, system: BaseSystem):
+    def __init__(
+        self,
+        system: BaseSystem,
+        gradient_computer: gradient.GradientComputer | None = None,
+    ):
         """Don't perform parameter updates."""
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         return jnp.zeros_like(self.system.cs)
@@ -33,7 +39,12 @@ class DummyOptimizer(BaseOptimizer):
 
 
 class GradientDescent(BaseOptimizer):
-    def __init__(self, system: BaseSystem, learning_rate: float = 1e-4):
+    def __init__(
+        self,
+        system: BaseSystem,
+        learning_rate: float = 1e-4,
+        gradient_computer: gradient.GradientComputer | None = None,
+    ):
         """Perform gradient descent.
 
         See documentation of `Optimizer`.
@@ -43,7 +54,7 @@ class GradientDescent(BaseOptimizer):
         learning_rate
             The learning rate to use in gradient descent
         """
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
         self.learning_rate = learning_rate
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
@@ -58,7 +69,11 @@ class GradientDescent(BaseOptimizer):
 
 class WeightedLevenbergMarquardt(BaseOptimizer):
     def __init__(
-        self, system: BaseSystem, learning_rate: float = 1e-3, lam: float = 1e-2
+        self,
+        system: BaseSystem,
+        learning_rate: float = 1e-3,
+        lam: float = 1e-2,
+        gradient_computer: gradient.GradientComputer | None = None,
     ):
         """Perform a weighted version of the Levenberg–Marquardt modification of
         Gauss–Newton.
@@ -70,7 +85,7 @@ class WeightedLevenbergMarquardt(BaseOptimizer):
         lam
             Levenberg–Marquardt parameter
         """
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
         self.learning_rate = learning_rate
         self.lam = lam
 
@@ -92,7 +107,11 @@ class WeightedLevenbergMarquardt(BaseOptimizer):
 
 class LevenbergMarquardt(BaseOptimizer):
     def __init__(
-        self, system: BaseSystem, learning_rate: float = 1e-3, lam: float = 1e-2
+        self,
+        system: BaseSystem,
+        learning_rate: float = 1e-3,
+        lam: float = 1e-2,
+        gradient_computer: gradient.GradientComputer | None = None,
     ):
         """Perform the Levenberg–Marquardt modification of Gauss–Newton.
 
@@ -103,18 +122,20 @@ class LevenbergMarquardt(BaseOptimizer):
         lam
             Levenberg–Marquardt parameter
         """
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
         self.learning_rate = learning_rate
         self.lam = lam
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         gradient = self.compute_gradient(observed_true, nudged)
-        return self.step_from_gradient(gradient, observed_true, nudged)
+        return self.step_from_gradient(
+            gradient, observed_true.mean(axis=0), nudged.mean(axis=0)
+        )
 
     def step_from_gradient(
         self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
     ) -> jndarray:
-        w = self.system.compute_w(nudged)
+        w = sensitivity._compute_sensitivity(self.system, nudged)
         m = w.shape[1]
         w_2d = w.reshape(-1, m)
         mat = jnp.real(w_2d.conj().T @ w_2d)
@@ -131,6 +152,7 @@ class OptaxWrapper(BaseOptimizer):
         self,
         system: BaseSystem,
         optimizer: optax.GradientTransformationExtraArgs,
+        gradient_computer: gradient.GradientComputer | None = None,
     ):
         """Wrap a given Optax optimizer.
 
@@ -140,7 +162,7 @@ class OptaxWrapper(BaseOptimizer):
             Instance of `optax.GradientTransformationExtraArgs`
             For example, `optax.adam(learning_rate=1e-1)`.
         """
-        super().__init__(system)
+        super().__init__(system, gradient_computer)
         self.optimizer = optimizer
         self.opt_state = self.optimizer.init(system.cs)
 
