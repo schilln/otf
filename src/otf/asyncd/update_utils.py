@@ -11,9 +11,7 @@ jndarray = jnp.ndarray
 
 def get_update_function(
     optimizer: base.BaseOptimizer,
-) -> Callable[
-    [base.BaseOptimizer, jndarray, jndarray, int, int, int], jndarray
-]:
+) -> Callable[[base.BaseOptimizer, jndarray, jndarray], jndarray]:
     """Returns a function to update parameters.
 
     Parameters
@@ -28,10 +26,6 @@ def get_update_function(
         - an optimizer,
         - true observed values,
         - data assimilated values,
-        - start index for `true_observed` (inclusive),
-        - end index for `true_observed` (exclusive), and
-        - the number of steps used in the time integration method (e.g., a
-          single-step solver like forward Euler uses 1 step)
 
         and returns the updated parameter values.
 
