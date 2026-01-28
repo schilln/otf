@@ -10,7 +10,7 @@ jndarray = jnp.ndarray
 
 
 def get_update_function(
-    optimizer: base.BaseOptimizer,
+    optimizer: base.BaseOptimizer | Callable[[jndarray, jndarray], jndarray],
 ) -> Callable[[base.BaseOptimizer, jndarray, jndarray], jndarray]:
     """Returns a function to update parameters.
 
@@ -30,7 +30,10 @@ def get_update_function(
         and returns the updated parameter values.
 
     """
-    if isinstance(optimizer.gradient_computer, optim.SensitivityGradient):
+    if not hasattr(optimizer, "gradient_computer"):
+        # Optimizer is a callable without a gradient_computer attribute
+        update = _multiple_state
+    elif isinstance(optimizer.gradient_computer, optim.SensitivityGradient):
         match optimizer.gradient_computer.update_option:
             case sensitivity.UpdateOption.last_state:
                 update = _last_state
@@ -60,7 +63,7 @@ def _last_state(
 
 
 def _multiple_state(
-    optimizer: base.BaseOptimizer,
+    optimizer: base.BaseOptimizer | Callable[[jndarray, jndarray], jndarray],
     true_observed: jndarray,
     assimilated: jndarray,
 ) -> jndarray:
