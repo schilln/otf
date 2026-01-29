@@ -344,8 +344,8 @@ def pruned_factory(system_type: type[BaseSystem]) -> type[BaseSystem]:
     Parameters
     ----------
     system_type
-        The type of `System` (not an instance) to be wrapped, e.g., the
-        Lorenz '63 system.
+        The type of `BaseSystem` (not an instance) to be wrapped, e.g.,
+        `system.System_ModelKnown`
     """
 
     class Pruned(system_type):
@@ -370,9 +370,9 @@ def pruned_factory(system_type: type[BaseSystem]) -> type[BaseSystem]:
                 Require each parameter to be less than its corresponding
                 threshold at least `iterations` times consecutively before
                 setting it to zero (permanently).
-                As with `threshold`, if an `int`, each parameter will be
-                use this common value, but if an array, then each parameter will
-                use it corresponding value.
+                As with `threshold`, if an `int`, each parameter will use this
+                common value, but if an array, then each parameter will use its
+                corresponding value.
                 If None, only one time being less than `threshold` is needed
                 to set a parameter to zero.
             """
@@ -430,6 +430,8 @@ def pruned_factory(system_type: type[BaseSystem]) -> type[BaseSystem]:
             lambda self: self._cs, lambda self, value: self._set_cs(value)
         )
 
+    # TODO: Check if this is working correctly. Or rework how pruned systems are
+    # constructed.
     doc = (
         "This is a 'Pruned' version of the original class "
         f"({system_type.__module__}.{system_type.__qualname__}); "
