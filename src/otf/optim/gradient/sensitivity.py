@@ -55,7 +55,38 @@ class SensitivityGradient(GradientComputer):
             gradient = diff @ w.reshape(-1, m).conj()
         else:
             gradient = diff @ self._weight @ w.reshape(-1, m).conj()
+
+        gradient_from_model_error = True
+        if gradient_from_model_error:
+            gradient = gradient.at[:].add(
+                self._gradient_from_model_error(observed_true, assimilated)
+            )
+
         return gradient if self.system.cs.dtype == complex else gradient.real
+
+    def _gradient_from_model_error(
+        self, observed_true: jndarray, assimilated: jndarray
+    ) -> jndarray:
+        """Define an error by the difference between the model/ODE evaluated at
+        the assimilated state and the model evaluated at the observed parts of
+        the true state with unobserved parts replaced by the assimilated state.
+        Compute the resulting gradient.
+        """
+
+        # When variables are not observed, this computation requires the
+        # unobserved part of the sensitivity, which we don't have access to in
+        # this asymptotic sensitivity approach.
+        assert not jnp.any(self.system.unobserved_mask)
+
+        f = self.system.assimilated_ode
+        cs = self.system.cs
+        df_dc = self.system.df_dc
+
+        s = assimilated.at[self.system.observed_mask].set(observed_true)
+
+        return (f(cs, assimilated) - f(cs, s)).conj() @ (
+            df_dc(cs, assimilated) - df_dc(cs, s)
+        )
 
     def _last_state(
         self, observed_true: jndarray, assimilated: jndarray
