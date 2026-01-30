@@ -61,7 +61,7 @@ class AdjointGradient(GradientComputer):
     ) -> jndarray:
         adjoint = self._compute_adjoint(observed_true, assimilated)
 
-        return _compute_gradient(
+        return self._compute_gradient(
             assimilated, adjoint, self.system.df_dc, self.system.cs
         )
 
@@ -110,19 +110,18 @@ class AdjointGradient(GradientComputer):
 
     # Adjoint computation
 
+    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_asymptotic(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         adjoint = jnp.zeros_like(assimilated)
         adjoint = adjoint.at[:, self.system.observed_mask].set(
-            _compute_adjoint_asymptotic(
-                observed_true,
-                assimilated[:, self.system.observed_mask],
-                self.system.mu,
-            )
+            -(assimilated[:, self.system.observed_mask] - observed_true).conj()
+            / self.system.mu
         )
         return adjoint
 
+    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_complete(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -143,6 +142,7 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint[::-1]
 
+    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_unobserved(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -152,6 +152,7 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint
 
+    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_unobserved_only(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -172,23 +173,19 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint[::-1]
 
-
-@partial(jax.jit, static_argnames=("df_dc_fn",))
-def _compute_gradient(
-    assimilated: jndarray, adjoint: jndarray, df_dc_fn: Callable, cs: jndarray
-) -> jndarray:
-    df_dc = jax.vmap(df_dc_fn, (None, 0))(cs, assimilated)
-    gradient = (
-        -(jnp.expand_dims(adjoint, 1) @ df_dc).squeeze().mean(axis=0).conj()
-    )
-    return gradient if cs.dtype == complex else gradient.real
-
-
-@jax.jit
-def _compute_adjoint_asymptotic(
-    observed_true: jndarray, observed_assimilated: jndarray, mu: float
-) -> jndarray:
-    return -(observed_assimilated - observed_true).conj() / mu
+    @staticmethod
+    @partial(jax.jit, static_argnames=("df_dc_fn",))
+    def _compute_gradient(
+        assimilated: jndarray,
+        adjoint: jndarray,
+        df_dc_fn: Callable,
+        cs: jndarray,
+    ) -> jndarray:
+        df_dc = jax.vmap(df_dc_fn, (None, 0))(cs, assimilated)
+        gradient = (
+            -(jnp.expand_dims(adjoint, 1) @ df_dc).squeeze().mean(axis=0).conj()
+        )
+        return gradient if cs.dtype == complex else gradient.real
 
 
 class AdjointSystem(System_ModelUnknown):
