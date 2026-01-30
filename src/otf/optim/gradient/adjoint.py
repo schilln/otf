@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Callable
 from enum import Enum
 from functools import partial
@@ -6,7 +8,7 @@ import jax
 from jax import numpy as jnp
 
 from ...system.base import BaseSystem, System_ModelUnknown
-from ...time_integration.base import MultistepSolver
+from ...time_integration.base import MultistepSolver, SinglestepSolver
 from .gradient_computer import GradientComputer
 
 jndarray = jnp.ndarray
@@ -35,44 +37,79 @@ class AdjointGradient(GradientComputer):
         system: BaseSystem,
         dt: float,
         update_option: UpdateOption = UpdateOption.asymptotic,
-        solver: tuple[type[MultistepSolver]] | None = None,
+        solver: tuple[type[SinglestepSolver | MultistepSolver]]
+        | type[SinglestepSolver | MultistepSolver]
+        | None = None,
     ):
         super().__init__(system)
         self._dt = dt
+
+        self._compute_adjoint = self._set_up_adjoint_method(update_option)
 
         if update_option is not UpdateOption.asymptotic:
             if solver is None:
                 raise ValueError(
                     "`solver` must not be None for the given update option"
                 )
-            if update_option is UpdateOption.complete:
-                system = CompleteSystem(system)
-                self._compute_adjoint = self.compute_adjoint_complete
-            elif update_option is UpdateOption.unobserved:
-                system = UnobservedSystem(system)
 
-                def compute_adjoint(observed_true, assimilated):
-                    adjoint = self.compute_adjoint_asymptotic(
-                        observed_true, assimilated
-                    )
-                    adjoint = adjoint.at[:, self.system.unobserved_mask].add(
-                        self.compute_adjoint_unobserved(
-                            observed_true, assimilated
-                        )
-                    )
-                    return adjoint
+            adjoint_system = self._set_up_adjoint_system(system, update_option)
 
-                self._compute_adjoint = compute_adjoint
-            else:
+            self._solver = self._set_up_solver(adjoint_system, solver)
+
+    def _set_up_adjoint_method(self, update_option: UpdateOption) -> Callable:
+        """Select the method to compute the adjoint."""
+        match update_option:
+            case UpdateOption.asymptotic:
+                return self.compute_adjoint_asymptotic
+            case UpdateOption.complete:
+                return self.compute_adjoint_complete
+            case UpdateOption.unobserved:
+                return self._create_unobserved_compute_method()
+            case _:
                 raise ValueError("update option is not supported")
 
-            if not isinstance(solver, tuple):
-                solver = (solver,)
-            self._solver = solver[0](system)
-            for s in solver[1:]:
-                self._solver = s(system, self._solver)
+    def _set_up_adjoint_system(
+        self,
+        system: BaseSystem,
+        update_option: UpdateOption,
+    ) -> AdjointSystem:
+        """Create the adjoint system."""
+        if update_option is UpdateOption.complete:
+            return CompleteSystem(system)
+        elif update_option is UpdateOption.unobserved:
+            return UnobservedSystem(system)
         else:
-            self._compute_adjoint = self.compute_adjoint_asymptotic
+            raise ValueError("update option is not supported")
+
+    def _set_up_solver(
+        self,
+        system: BaseSystem,
+        solver: tuple[type[SinglestepSolver | MultistepSolver]]
+        | type[SinglestepSolver | MultistepSolver],
+    ) -> SinglestepSolver | MultistepSolver:
+        """Initialize and chain solvers for the given system."""
+        if not isinstance(solver, tuple):
+            solver = (solver,)
+
+        _solver = solver[0](system)
+        for s in solver[1:]:
+            _solver = s(system, _solver)
+
+        return _solver
+
+    def _create_unobserved_compute_method(self) -> Callable:
+        """Create the compute adjoint method for unobserved update option."""
+
+        def compute_adjoint(observed_true, assimilated):
+            adjoint = self.compute_adjoint_asymptotic(
+                observed_true, assimilated
+            )
+            adjoint = adjoint.at[:, self.system.unobserved_mask].add(
+                self.compute_adjoint_unobserved(observed_true, assimilated)
+            )
+            return adjoint
+
+        return compute_adjoint
 
     def compute_gradient(
         self, observed_true: jndarray, assimilated: jndarray
