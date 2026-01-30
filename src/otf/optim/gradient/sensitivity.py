@@ -45,6 +45,7 @@ class SensitivityGradient(GradientComputer):
             case _:
                 raise NotImplementedError("update option is not supported")
 
+    @partial(jax.jit, static_argnames=("self",))
     def _compute_gradient(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -57,11 +58,13 @@ class SensitivityGradient(GradientComputer):
             gradient = diff @ self._weight @ w.reshape(-1, m).conj()
         return gradient if self.system.cs.dtype == complex else gradient.real
 
+    @partial(jax.jit, static_argnames=("self",))
     def _last_state(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         return self._compute_gradient(observed_true[-1], assimilated[-1])
 
+    @partial(jax.jit, static_argnames=("self",))
     def _mean_state(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -69,6 +72,7 @@ class SensitivityGradient(GradientComputer):
             observed_true.mean(axis=0), assimilated.mean(axis=0)
         )
 
+    @partial(jax.jit, static_argnames=("self",))
     def _mean_derivative(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:

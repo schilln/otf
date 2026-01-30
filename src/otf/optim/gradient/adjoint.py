@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Callable
 from enum import Enum
 from functools import partial
@@ -6,7 +8,7 @@ import jax
 from jax import numpy as jnp
 
 from ...system.base import BaseSystem, System_ModelUnknown
-from ...time_integration.base import MultistepSolver
+from ...time_integration.base import MultistepSolver, SinglestepSolver
 from .gradient_computer import GradientComputer
 
 jndarray = jnp.ndarray
@@ -35,68 +37,92 @@ class AdjointGradient(GradientComputer):
         system: BaseSystem,
         dt: float,
         update_option: UpdateOption = UpdateOption.asymptotic,
-        solver: tuple[type[MultistepSolver]] | None = None,
+        solver: tuple[type[SinglestepSolver | MultistepSolver]]
+        | type[SinglestepSolver | MultistepSolver]
+        | None = None,
     ):
         super().__init__(system)
         self._dt = dt
+
+        self._compute_adjoint = self._set_up_adjoint_method(update_option)
 
         if update_option is not UpdateOption.asymptotic:
             if solver is None:
                 raise ValueError(
                     "`solver` must not be None for the given update option"
                 )
-            if update_option is UpdateOption.complete:
-                system = CompleteSystem(system)
-                self._compute_adjoint = self.compute_adjoint_complete
-            elif update_option is UpdateOption.unobserved:
-                system = UnobservedSystem(system)
 
-                def compute_adjoint(observed_true, assimilated):
-                    adjoint = self.compute_adjoint_asymptotic(
-                        observed_true, assimilated
-                    )
-                    adjoint = adjoint.at[:, self.system.unobserved_mask].add(
-                        self.compute_adjoint_unobserved(
-                            observed_true, assimilated
-                        )
-                    )
-                    return adjoint
+            adjoint_system = self._set_up_adjoint_system(system, update_option)
 
-                self._compute_adjoint = compute_adjoint
-            else:
-                raise ValueError("update option is not supported")
-
-            if not isinstance(solver, tuple):
-                solver = (solver,)
-            self._solver = solver[0](system)
-            for s in solver[1:]:
-                self._solver = s(system, self._solver)
-        else:
-            self._compute_adjoint = self.compute_adjoint_asymptotic
+            self._solver = self._set_up_solver(adjoint_system, solver)
 
     def compute_gradient(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         adjoint = self._compute_adjoint(observed_true, assimilated)
 
-        return _compute_gradient(
+        return self._compute_gradient(
             assimilated, adjoint, self.system.df_dc, self.system.cs
         )
 
-    def compute_adjoint_asymptotic(
+    # Initialization
+
+    def _set_up_adjoint_method(self, update_option: UpdateOption) -> Callable:
+        """Select the method to compute the adjoint."""
+        match update_option:
+            case UpdateOption.asymptotic:
+                return self._compute_adjoint_asymptotic
+            case UpdateOption.complete:
+                return self._compute_adjoint_complete
+            case UpdateOption.unobserved:
+                return self._compute_adjoint_unobserved
+            case _:
+                raise ValueError("update option is not supported")
+
+    def _set_up_adjoint_system(
+        self,
+        system: BaseSystem,
+        update_option: UpdateOption,
+    ) -> AdjointSystem:
+        """Create the adjoint system."""
+        if update_option is UpdateOption.complete:
+            return CompleteSystem(system)
+        elif update_option is UpdateOption.unobserved:
+            return UnobservedSystem(system)
+        else:
+            raise ValueError("update option is not supported")
+
+    def _set_up_solver(
+        self,
+        system: BaseSystem,
+        solver: tuple[type[SinglestepSolver | MultistepSolver]]
+        | type[SinglestepSolver | MultistepSolver],
+    ) -> SinglestepSolver | MultistepSolver:
+        """Initialize and chain solvers for the given system."""
+        if not isinstance(solver, tuple):
+            solver = (solver,)
+
+        _solver = solver[0](system)
+        for s in solver[1:]:
+            _solver = s(system, _solver)
+
+        return _solver
+
+    # Adjoint computation
+
+    @partial(jax.jit, static_argnames=("self",))
+    def _compute_adjoint_asymptotic(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         adjoint = jnp.zeros_like(assimilated)
         adjoint = adjoint.at[:, self.system.observed_mask].set(
-            _compute_adjoint_asymptotic(
-                observed_true,
-                assimilated[:, self.system.observed_mask],
-                self.system.mu,
-            )
+            -(assimilated[:, self.system.observed_mask] - observed_true).conj()
+            / self.system.mu
         )
         return adjoint
 
-    def compute_adjoint_complete(
+    @partial(jax.jit, static_argnames=("self",))
+    def _compute_adjoint_complete(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         tn, n = assimilated.shape
@@ -116,7 +142,18 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint[::-1]
 
-    def compute_adjoint_unobserved(
+    @partial(jax.jit, static_argnames=("self",))
+    def _compute_adjoint_unobserved(
+        self, observed_true: jndarray, assimilated: jndarray
+    ) -> jndarray:
+        adjoint = self._compute_adjoint_asymptotic(observed_true, assimilated)
+        adjoint = adjoint.at[:, self.system.unobserved_mask].add(
+            self._compute_adjoint_unobserved_only(observed_true, assimilated)
+        )
+        return adjoint
+
+    @partial(jax.jit, static_argnames=("self",))
+    def _compute_adjoint_unobserved_only(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         tn, n = assimilated[:, self.system.unobserved_mask].shape
@@ -136,23 +173,19 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint[::-1]
 
-
-@partial(jax.jit, static_argnames=("df_dc_fn",))
-def _compute_gradient(
-    assimilated: jndarray, adjoint: jndarray, df_dc_fn: Callable, cs: jndarray
-) -> jndarray:
-    df_dc = jax.vmap(df_dc_fn, (None, 0))(cs, assimilated)
-    gradient = (
-        -(jnp.expand_dims(adjoint, 1) @ df_dc).squeeze().mean(axis=0).conj()
-    )
-    return gradient if cs.dtype == complex else gradient.real
-
-
-@jax.jit
-def _compute_adjoint_asymptotic(
-    observed_true: jndarray, observed_assimilated: jndarray, mu: float
-) -> jndarray:
-    return -(observed_assimilated - observed_true).conj() / mu
+    @staticmethod
+    @partial(jax.jit, static_argnames=("df_dc_fn",))
+    def _compute_gradient(
+        assimilated: jndarray,
+        adjoint: jndarray,
+        df_dc_fn: Callable,
+        cs: jndarray,
+    ) -> jndarray:
+        df_dc = jax.vmap(df_dc_fn, (None, 0))(cs, assimilated)
+        gradient = (
+            -(jnp.expand_dims(adjoint, 1) @ df_dc).squeeze().mean(axis=0).conj()
+        )
+        return gradient if cs.dtype == complex else gradient.real
 
 
 class AdjointSystem(System_ModelUnknown):
