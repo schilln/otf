@@ -56,6 +56,17 @@ class AdjointGradient(GradientComputer):
 
             self._solver = self._set_up_solver(adjoint_system, solver)
 
+    def compute_gradient(
+        self, observed_true: jndarray, assimilated: jndarray
+    ) -> jndarray:
+        adjoint = self._compute_adjoint(observed_true, assimilated)
+
+        return _compute_gradient(
+            assimilated, adjoint, self.system.df_dc, self.system.cs
+        )
+
+    # Initialization
+
     def _set_up_adjoint_method(self, update_option: UpdateOption) -> Callable:
         """Select the method to compute the adjoint."""
         match update_option:
@@ -97,14 +108,7 @@ class AdjointGradient(GradientComputer):
 
         return _solver
 
-    def compute_gradient(
-        self, observed_true: jndarray, assimilated: jndarray
-    ) -> jndarray:
-        adjoint = self._compute_adjoint(observed_true, assimilated)
-
-        return _compute_gradient(
-            assimilated, adjoint, self.system.df_dc, self.system.cs
-        )
+    # Adjoint computation
 
     def _compute_adjoint_asymptotic(
         self, observed_true: jndarray, assimilated: jndarray
