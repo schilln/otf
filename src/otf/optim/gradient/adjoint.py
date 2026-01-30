@@ -64,7 +64,7 @@ class AdjointGradient(GradientComputer):
             case UpdateOption.complete:
                 return self.compute_adjoint_complete
             case UpdateOption.unobserved:
-                return self._create_unobserved_compute_method()
+                return self.compute_adjoint_unobserved
             case _:
                 raise ValueError("update option is not supported")
 
@@ -96,20 +96,6 @@ class AdjointGradient(GradientComputer):
             _solver = s(system, _solver)
 
         return _solver
-
-    def _create_unobserved_compute_method(self) -> Callable:
-        """Create the compute adjoint method for unobserved update option."""
-
-        def compute_adjoint(observed_true, assimilated):
-            adjoint = self.compute_adjoint_asymptotic(
-                observed_true, assimilated
-            )
-            adjoint = adjoint.at[:, self.system.unobserved_mask].add(
-                self.compute_adjoint_unobserved(observed_true, assimilated)
-            )
-            return adjoint
-
-        return compute_adjoint
 
     def compute_gradient(
         self, observed_true: jndarray, assimilated: jndarray
@@ -154,6 +140,15 @@ class AdjointGradient(GradientComputer):
         return adjoint[::-1]
 
     def compute_adjoint_unobserved(
+        self, observed_true: jndarray, assimilated: jndarray
+    ) -> jndarray:
+        adjoint = self.compute_adjoint_asymptotic(observed_true, assimilated)
+        adjoint = adjoint.at[:, self.system.unobserved_mask].add(
+            self.compute_adjoint_unobserved_only(observed_true, assimilated)
+        )
+        return adjoint
+
+    def compute_adjoint_unobserved_only(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         tn, n = assimilated[:, self.system.unobserved_mask].shape
