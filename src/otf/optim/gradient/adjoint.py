@@ -60,11 +60,11 @@ class AdjointGradient(GradientComputer):
         """Select the method to compute the adjoint."""
         match update_option:
             case UpdateOption.asymptotic:
-                return self.compute_adjoint_asymptotic
+                return self._compute_adjoint_asymptotic
             case UpdateOption.complete:
-                return self.compute_adjoint_complete
+                return self._compute_adjoint_complete
             case UpdateOption.unobserved:
-                return self.compute_adjoint_unobserved
+                return self._compute_adjoint_unobserved
             case _:
                 raise ValueError("update option is not supported")
 
@@ -106,7 +106,7 @@ class AdjointGradient(GradientComputer):
             assimilated, adjoint, self.system.df_dc, self.system.cs
         )
 
-    def compute_adjoint_asymptotic(
+    def _compute_adjoint_asymptotic(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         adjoint = jnp.zeros_like(assimilated)
@@ -119,7 +119,7 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint
 
-    def compute_adjoint_complete(
+    def _compute_adjoint_complete(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         tn, n = assimilated.shape
@@ -139,16 +139,16 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint[::-1]
 
-    def compute_adjoint_unobserved(
+    def _compute_adjoint_unobserved(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        adjoint = self.compute_adjoint_asymptotic(observed_true, assimilated)
+        adjoint = self._compute_adjoint_asymptotic(observed_true, assimilated)
         adjoint = adjoint.at[:, self.system.unobserved_mask].add(
-            self.compute_adjoint_unobserved_only(observed_true, assimilated)
+            self._compute_adjoint_unobserved_only(observed_true, assimilated)
         )
         return adjoint
 
-    def compute_adjoint_unobserved_only(
+    def _compute_adjoint_unobserved_only(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         tn, n = assimilated[:, self.system.unobserved_mask].shape
