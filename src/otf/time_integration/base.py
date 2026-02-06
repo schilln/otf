@@ -458,14 +458,17 @@ class MultistepSolver(BaseSolver):
         True if this solver instance uses a `MultistageSolver` at any point
     """
 
-    def __init__(self, system: BaseSystem, pre_multistep_solver: BaseSolver):
+    def __init__(
+        self, system: BaseSystem, pre_multistep_solver: BaseSolver | None = None
+    ):
         """
 
         Parameters
         ----------
         pre_multistep_solver
             An instantiated `BaseSolver` to use until enough steps have been
-            taken to use the multistep solver
+            taken to use the multistep solver, or None (in which case sufficient
+            initial steps must be given for each solve)
         """
         super().__init__(system)
 
@@ -519,6 +522,12 @@ class MultistepSolver(BaseSolver):
         # Don't have enough steps to use this solver, so use
         # self._pre_multistep_solver to start.
         if len0 < self.k:
+            if self._pre_multistep_solver is None:
+                raise ValueError(
+                    "not enough initial steps given"
+                    f" ({len0} given, {self.k} needed)"
+                )
+
             pre_k = (
                 self._pre_multistep_solver.k
                 if isinstance(self._pre_multistep_solver, MultistepSolver)
@@ -613,6 +622,12 @@ class MultistepSolver(BaseSolver):
         # Don't have enough steps to use this solver, so use
         # self._pre_multistep_solver to start.
         if len0 < self.k:
+            if self._pre_multistep_solver is None:
+                raise ValueError(
+                    "not enough initial steps given"
+                    f" ({len0} given, {self.k} needed)"
+                )
+
             pre_k = (
                 self._pre_multistep_solver.k
                 if isinstance(self._pre_multistep_solver, MultistepSolver)
