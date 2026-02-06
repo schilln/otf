@@ -137,10 +137,12 @@ class AdjointGradient(GradientComputer):
             (assimilated, observed_diff), axis=1
         )
 
+        s_ = self.s_
+        r_ = self.r_
         adjoint, _ = self._solver.solve_assimilated(
-            adjoint0, tf, self._dt, -self._dt, assimilated__observed_diff
+            adjoint0, tf, self._dt, -self._dt, assimilated__observed_diff[s_]
         )
-        return adjoint
+        return adjoint[r_]
 
     @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_unobserved(
@@ -168,10 +170,12 @@ class AdjointGradient(GradientComputer):
             (assimilated, observed_diff), axis=1
         )
 
+        s_ = self.s_
+        r_ = self.r_
         adjoint, _ = self._solver.solve_assimilated(
-            adjoint0, tf, self._dt, -self._dt, assimilated__observed_diff
+            adjoint0, tf, self._dt, -self._dt, assimilated__observed_diff[s_]
         )
-        return adjoint
+        return adjoint[r_]
 
     @staticmethod
     @partial(jax.jit, static_argnames=("df_dc_fn",))
