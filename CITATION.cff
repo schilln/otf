@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+title: OTF
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Nathan
+    family-names: Schill
+repository-code: "https://github.com/schilln/otf"
+abstract: >-
+  Package implementing the on-the-fly (OTF) method of data
+  assimilation.
+keywords:
+  - data assimilation
+  - continuous data assimilation
+license: BSD-3-Clause
