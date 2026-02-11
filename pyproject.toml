@@ -1,6 +1,8 @@
 [project]
 name = "otf"
 version = "0.1.0"
+license = "BSD-3-Clause"
+license-files = ["LICENSE.txt"]
 description = "A package implementing the on-the-fly (OTF) method of data assimilation"
 readme = "README.md"
 authors = [
