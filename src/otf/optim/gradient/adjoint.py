@@ -171,7 +171,7 @@ class AdjointGradient(GradientComputer):
         adjoint, _ = self._solver.solve_assimilated(
             adjoint0, tf, self._dt, -self._dt, assimilated__observed_diff[::-1]
         )
-        return adjoint[::-1]
+        return adjoint[::-1] / self.system.mu
 
     @staticmethod
     @partial(jax.jit, static_argnames=("df_dc_fn",))
