@@ -71,12 +71,14 @@ class SensitivityGradient(GradientComputer):
         self, observed_true: jndarray, assimilated: jndarray, cs: jndarray
     ) -> jndarray:
         diff = assimilated[self.system.observed_mask] - observed_true
-        w = self._compute_sensitivity_asymptotic(self.system, assimilated, cs)
-        m = w.shape[1]
+        sensitivity = self._compute_sensitivity_asymptotic(
+            self.system, assimilated, cs
+        )
+        m = sensitivity.shape[1]
         if self._weight is None:
-            gradient = diff @ w.reshape(-1, m).conj()
+            gradient = diff @ sensitivity.reshape(-1, m).conj()
         else:
-            gradient = diff @ self._weight @ w.reshape(-1, m).conj()
+            gradient = diff @ self._weight @ sensitivity.reshape(-1, m).conj()
         return gradient if cs.dtype == complex else gradient.real
 
     @staticmethod
