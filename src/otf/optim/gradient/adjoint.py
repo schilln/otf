@@ -238,5 +238,5 @@ class UnobservedSystem(AdjointSystem):
 
         df_dv = self.df_dv_fn(cs, assimilated)
         val = df_dv.T[um][:, um] @ adjoint
-        val = val.at[:].subtract(df_dv[um][:, om] @ observed_diff)
+        val = val.at[:].subtract(df_dv.T[um][:, om] @ observed_diff)
         return val
