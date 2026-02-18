@@ -47,43 +47,45 @@ class SensitivityGradient(GradientComputer):
 
     @partial(jax.jit, static_argnames=("self",))
     def _compute_gradient(
-        self, observed_true: jndarray, assimilated: jndarray
+        self, observed_true: jndarray, assimilated: jndarray, cs: jndarray
     ) -> jndarray:
         diff = assimilated[self.system.observed_mask] - observed_true
-        w = _compute_sensitivity(self.system, assimilated)
+        w = _compute_sensitivity(self.system, assimilated, cs)
         m = w.shape[1]
         if self._weight is None:
             gradient = diff @ w.reshape(-1, m).conj()
         else:
             gradient = diff @ self._weight @ w.reshape(-1, m).conj()
-        return gradient if self.system.cs.dtype == complex else gradient.real
+        return gradient if cs.dtype == complex else gradient.real
 
-    @partial(jax.jit, static_argnames=("self",))
     def _last_state(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        return self._compute_gradient(observed_true[-1], assimilated[-1])
+        return self._compute_gradient(
+            observed_true[-1], assimilated[-1], self.system.cs
+        )
 
-    @partial(jax.jit, static_argnames=("self",))
     def _mean_state(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         return self._compute_gradient(
-            observed_true.mean(axis=0), assimilated.mean(axis=0)
+            observed_true.mean(axis=0), assimilated.mean(axis=0), self.system.cs
         )
 
-    @partial(jax.jit, static_argnames=("self",))
     def _mean_derivative(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        return jax.vmap(self._compute_gradient, 0)(
-            observed_true, assimilated
+        return jax.vmap(self._compute_gradient, (0, 0, None))(
+            observed_true, assimilated, self.system.cs
         ).mean(axis=0)
 
     update_option = property(lambda self: self._update_option)
 
 
-def _compute_sensitivity(system: BaseSystem, assimilated: jndarray) -> jndarray:
+@partial(jax.jit, static_argnames="system")
+def _compute_sensitivity(
+    system: BaseSystem, assimilated: jndarray, cs: jndarray
+) -> jndarray:
     """Compute the leading-order approximation of the sensitivity equations.
 
     Parameters
@@ -91,6 +93,8 @@ def _compute_sensitivity(system: BaseSystem, assimilated: jndarray) -> jndarray:
     system
     assimilated
         Data assimilated system state
+    cs
+        System parameters
 
     Returns
     -------
@@ -99,13 +103,6 @@ def _compute_sensitivity(system: BaseSystem, assimilated: jndarray) -> jndarray:
         ith sensitivity (i.e., w_i = dv/dc_i corresponding to the ith
         unknown parameter c_i)
     """
-    return __compute_sensitivity(assimilated, system.cs, system)
-
-
-@partial(jax.jit, static_argnames="system")
-def __compute_sensitivity(
-    assimilated: jndarray, cs: jndarray, system: BaseSystem
-) -> jndarray:
     s = system
     om = s.observed_mask
 

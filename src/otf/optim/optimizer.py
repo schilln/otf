@@ -135,7 +135,9 @@ class LevenbergMarquardt(BaseOptimizer):
     def step_from_gradient(
         self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
     ) -> jndarray:
-        w = sensitivity._compute_sensitivity(self.system, nudged)
+        w = sensitivity._compute_sensitivity(
+            self.system, nudged, self.system.cs
+        )
         m = w.shape[1]
         w_2d = w.reshape(-1, m)
         mat = jnp.real(w_2d.conj().T @ w_2d)
