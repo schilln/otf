@@ -15,7 +15,6 @@ from jax import numpy as jnp
 from ..system.base import BaseSystem
 from . import gradient
 from .base import BaseOptimizer
-from .gradient import sensitivity
 
 jndarray = jnp.ndarray
 
@@ -135,7 +134,7 @@ class LevenbergMarquardt(BaseOptimizer):
     def step_from_gradient(
         self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
     ) -> jndarray:
-        w = sensitivity._compute_sensitivity_asymptotic(
+        w = self.gradient_computer._compute_sensitivity_asymptotic(
             self.system, nudged, self.system.cs
         )
         m = w.shape[1]

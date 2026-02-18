@@ -71,7 +71,7 @@ class SensitivityGradient(GradientComputer):
         self, observed_true: jndarray, assimilated: jndarray, cs: jndarray
     ) -> jndarray:
         diff = assimilated[self.system.observed_mask] - observed_true
-        w = _compute_sensitivity_asymptotic(self.system, assimilated, cs)
+        w = self._compute_sensitivity_asymptotic(self.system, assimilated, cs)
         m = w.shape[1]
         if self._weight is None:
             gradient = diff @ w.reshape(-1, m).conj()
@@ -79,42 +79,42 @@ class SensitivityGradient(GradientComputer):
             gradient = diff @ self._weight @ w.reshape(-1, m).conj()
         return gradient if cs.dtype == complex else gradient.real
 
+    @staticmethod
+    @partial(jax.jit, static_argnames="system")
+    def _compute_sensitivity_asymptotic(
+        system, assimilated: jndarray, cs: jndarray
+    ) -> jndarray:
+        """Compute the leading-order approximation of the sensitivity equations.
+
+        Parameters
+        ----------
+        system
+        assimilated
+            Data assimilated system state
+        cs
+            System parameters
+
+        Returns
+        -------
+        sensitivity
+            The ith column corresponds to the asymptotic approximation of the
+            ith sensitivity (i.e., w_i = dv/dc_i corresponding to the ith
+            unknown parameter c_i)
+        """
+        s = system
+        om = s.observed_mask
+
+        df_dc = s.df_dc(cs, assimilated)
+
+        if s.observe_all:
+            return df_dc / s.mu
+        elif not s.use_unobserved_asymptotics:
+            return df_dc[om] / s.mu
+        else:
+            df_dv_QW0 = _solve_unobserved(assimilated, cs, df_dc, s)
+            return (df_dc[om] + df_dv_QW0[om]) / s.mu
+
     update_option = property(lambda self: self._update_option)
-
-
-@partial(jax.jit, static_argnames="system")
-def _compute_sensitivity_asymptotic(
-    system: BaseSystem, assimilated: jndarray, cs: jndarray
-) -> jndarray:
-    """Compute the leading-order approximation of the sensitivity equations.
-
-    Parameters
-    ----------
-    system
-    assimilated
-        Data assimilated system state
-    cs
-        System parameters
-
-    Returns
-    -------
-    sensitivity
-        The ith column corresponds to the asymptotic approximation of the
-        ith sensitivity (i.e., w_i = dv/dc_i corresponding to the ith
-        unknown parameter c_i)
-    """
-    s = system
-    om = s.observed_mask
-
-    df_dc = s.df_dc(cs, assimilated)
-
-    if s.observe_all:
-        return df_dc / s.mu
-    elif not s.use_unobserved_asymptotics:
-        return df_dc[om] / s.mu
-    else:
-        df_dv_QW0 = _solve_unobserved(assimilated, cs, df_dc, system)
-        return (df_dc[om] + df_dv_QW0[om]) / s.mu
 
 
 @partial(jax.jit, static_argnames="system")
