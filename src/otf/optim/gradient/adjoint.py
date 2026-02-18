@@ -40,9 +40,17 @@ class AdjointGradient(GradientComputer):
         solver: tuple[type[SinglestepSolver | MultistepSolver]]
         | type[SinglestepSolver | MultistepSolver]
         | None = None,
+        interval_fraction: float = 1,
     ):
         super().__init__(system)
         self._dt = dt
+
+        if not (0 < interval_fraction <= 1):
+            raise ValueError(
+                "`interval_fraction` should be in (0, 1]"
+                f" (was {interval_fraction})"
+            )
+        self._interval_fraction = interval_fraction
 
         self._compute_adjoint = self._set_up_adjoint_method(update_option)
 
@@ -59,10 +67,13 @@ class AdjointGradient(GradientComputer):
     def compute_gradient(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        adjoint = self._compute_adjoint(observed_true, assimilated)
+        frac = self._interval_fraction
+        n = len(observed_true)
+        s_ = jnp.s_[-round(n * frac) :]
+        adjoint = self._compute_adjoint(observed_true[s_], assimilated[s_])
 
         return self._compute_gradient(
-            assimilated, adjoint, self.system.df_dc, self.system.cs
+            assimilated[s_], adjoint, self.system.df_dc, self.system.cs
         )
 
     # Initialization
