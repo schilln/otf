@@ -45,19 +45,6 @@ class SensitivityGradient(GradientComputer):
             case _:
                 raise NotImplementedError("update option is not supported")
 
-    @partial(jax.jit, static_argnames=("self",))
-    def _compute_gradient(
-        self, observed_true: jndarray, assimilated: jndarray, cs: jndarray
-    ) -> jndarray:
-        diff = assimilated[self.system.observed_mask] - observed_true
-        w = _compute_sensitivity(self.system, assimilated, cs)
-        m = w.shape[1]
-        if self._weight is None:
-            gradient = diff @ w.reshape(-1, m).conj()
-        else:
-            gradient = diff @ self._weight @ w.reshape(-1, m).conj()
-        return gradient if cs.dtype == complex else gradient.real
-
     def _last_state(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -78,6 +65,19 @@ class SensitivityGradient(GradientComputer):
         return jax.vmap(self._compute_gradient, (0, 0, None))(
             observed_true, assimilated, self.system.cs
         ).mean(axis=0)
+
+    @partial(jax.jit, static_argnames=("self",))
+    def _compute_gradient(
+        self, observed_true: jndarray, assimilated: jndarray, cs: jndarray
+    ) -> jndarray:
+        diff = assimilated[self.system.observed_mask] - observed_true
+        w = _compute_sensitivity(self.system, assimilated, cs)
+        m = w.shape[1]
+        if self._weight is None:
+            gradient = diff @ w.reshape(-1, m).conj()
+        else:
+            gradient = diff @ self._weight @ w.reshape(-1, m).conj()
+        return gradient if cs.dtype == complex else gradient.real
 
     update_option = property(lambda self: self._update_option)
 
