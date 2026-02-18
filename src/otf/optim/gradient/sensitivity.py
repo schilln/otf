@@ -71,7 +71,7 @@ class SensitivityGradient(GradientComputer):
         self, observed_true: jndarray, assimilated: jndarray, cs: jndarray
     ) -> jndarray:
         diff = assimilated[self.system.observed_mask] - observed_true
-        w = _compute_sensitivity(self.system, assimilated, cs)
+        w = _compute_sensitivity_asymptotic(self.system, assimilated, cs)
         m = w.shape[1]
         if self._weight is None:
             gradient = diff @ w.reshape(-1, m).conj()
@@ -83,7 +83,7 @@ class SensitivityGradient(GradientComputer):
 
 
 @partial(jax.jit, static_argnames="system")
-def _compute_sensitivity(
+def _compute_sensitivity_asymptotic(
     system: BaseSystem, assimilated: jndarray, cs: jndarray
 ) -> jndarray:
     """Compute the leading-order approximation of the sensitivity equations.
