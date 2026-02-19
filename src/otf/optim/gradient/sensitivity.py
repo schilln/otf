@@ -56,11 +56,8 @@ class SensitivityGradient(GradientComputer):
         )
 
         return self._compute_gradient(
-            observed_true[-1:],
-            assimilated[-1:],
-            self.system.cs,
-            sensitivity,
-        ).squeeze(axis=0)
+            observed_true[-1:], assimilated[-1:], self.system.cs, sensitivity
+        )
 
     def _mean_state(
         self, observed_true: jndarray, assimilated: jndarray
@@ -75,7 +72,7 @@ class SensitivityGradient(GradientComputer):
             assimilated_mean,
             self.system.cs,
             sensitivity,
-        ).squeeze(axis=0)
+        )
 
     def _mean_derivative(
         self, observed_true: jndarray, assimilated: jndarray
@@ -86,7 +83,7 @@ class SensitivityGradient(GradientComputer):
 
         return self._compute_gradient(
             observed_true, assimilated, self.system.cs, sensitivity
-        ).mean(axis=0)
+        )
 
     @partial(jax.jit, static_argnames=("self",))
     def _compute_gradient(
@@ -98,13 +95,17 @@ class SensitivityGradient(GradientComputer):
     ) -> jndarray:
         diff = assimilated[:, self.system.observed_mask] - observed_true
         if self._weight is None:
-            gradient = (jnp.expand_dims(diff, 1) @ sensitivity.conj()).squeeze(
-                axis=1
+            gradient = (
+                (jnp.expand_dims(diff, 1) @ sensitivity.conj())
+                .squeeze(axis=1)
+                .mean(axis=0)
             )
         else:
             gradient = (
-                jnp.expand_dims(diff, 1) @ self._weight @ sensitivity.conj()
-            ).squeeze(axis=1)
+                (jnp.expand_dims(diff, 1) @ self._weight @ sensitivity.conj())
+                .squeeze(axis=1)
+                .mean(axis=0)
+            )
         return gradient if cs.dtype == complex else gradient.real
 
     @staticmethod
