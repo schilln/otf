@@ -31,11 +31,20 @@ class SensitivityGradient(GradientComputer):
         self,
         system: BaseSystem,
         update_option: UpdateOption = UpdateOption.last_state,
+        use_unobserved_asymptotics: bool = False,
     ):
+        """
+        use_unobserved_asymptotics
+            Set to true to attempt to use additional asymptotic information from
+            "unobserved" portion of simulated state. This doesn't have full
+            mathematical support.
+        """
         super().__init__(system)
 
         self._update_option = update_option
         self.compute_gradient = self._set_up_gradient(update_option)
+
+        self._use_unobserved_asymptotics = use_unobserved_asymptotics
 
     def _set_up_gradient(self, update_option: UpdateOption) -> Callable:
         match update_option:
@@ -52,7 +61,7 @@ class SensitivityGradient(GradientComputer):
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         sensitivity = self._compute_sensitivity_asymptotic(
-            self.system, assimilated[-1:], self.system.cs
+            self, assimilated[-1:], self.system.cs
         )
 
         return self._compute_gradient(
@@ -64,7 +73,7 @@ class SensitivityGradient(GradientComputer):
     ) -> jndarray:
         assimilated_mean = assimilated.mean(axis=0, keepdims=True)
         sensitivity = self._compute_sensitivity_asymptotic(
-            self.system, assimilated_mean, self.system.cs
+            self, assimilated_mean, self.system.cs
         )
 
         return self._compute_gradient(
@@ -78,7 +87,7 @@ class SensitivityGradient(GradientComputer):
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         sensitivity = self._compute_sensitivity_asymptotic(
-            self.system, assimilated, self.system.cs
+            self, assimilated, self.system.cs
         )
 
         return self._compute_gradient(
@@ -109,15 +118,14 @@ class SensitivityGradient(GradientComputer):
         return gradient if cs.dtype == complex else gradient.real
 
     @staticmethod
-    @partial(jax.jit, static_argnames="system")
+    @partial(jax.jit, static_argnames="self")
     def _compute_sensitivity_asymptotic(
-        system, assimilated: jndarray, cs: jndarray
+        self, assimilated: jndarray, cs: jndarray
     ) -> jndarray:
         """Compute the leading-order approximation of the sensitivity equations.
 
         Parameters
         ----------
-        system
         assimilated
             Data assimilated system state
         cs
@@ -130,14 +138,14 @@ class SensitivityGradient(GradientComputer):
             ith sensitivity (i.e., w_i = dv/dc_i corresponding to the ith
             unknown parameter c_i)
         """
-        s = system
+        s = self.system
         om = s.observed_mask
 
         df_dc = jax.vmap(s.df_dc, (None, 0))(cs, assimilated)
 
         if s.observe_all:
             return df_dc / s.mu
-        elif not s.use_unobserved_asymptotics:
+        elif not self._use_unobserved_asymptotics:
             return df_dc[:, om] / s.mu
         else:
             df_dv_QW0 = _solve_unobserved(assimilated, cs, df_dc, s)
