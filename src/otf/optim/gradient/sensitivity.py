@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from enum import Enum
 from functools import partial
 
@@ -34,46 +35,68 @@ class SensitivityGradient(GradientComputer):
         super().__init__(system)
 
         self._update_option = update_option
+        self.compute_gradient = self._set_up_gradient(update_option)
 
+    def _set_up_gradient(self, update_option: UpdateOption) -> Callable:
         match update_option:
             case UpdateOption.last_state:
-                self.compute_gradient = self._last_state
+                return self._last_state
             case UpdateOption.mean_state:
-                self.compute_gradient = self._mean_state
+                return self._mean_state
             case UpdateOption.mean_gradient:
-                self.compute_gradient = self._mean_derivative
+                return self._mean_derivative
             case _:
                 raise NotImplementedError("update option is not supported")
 
     def _last_state(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
+        sensitivity = self._compute_sensitivity_asymptotic(
+            self.system, assimilated[-1:], self.system.cs
+        )
+
         return self._compute_gradient(
-            observed_true[-1], assimilated[-1], self.system.cs
+            observed_true[-1],
+            assimilated[-1],
+            self.system.cs,
+            sensitivity.squeeze(axis=0),
         )
 
     def _mean_state(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
+        assimilated_mean = assimilated.mean(axis=0, keepdims=True)
+        sensitivity = self._compute_sensitivity_asymptotic(
+            self.system, assimilated_mean, self.system.cs
+        )
+
         return self._compute_gradient(
-            observed_true.mean(axis=0), assimilated.mean(axis=0), self.system.cs
+            observed_true.mean(axis=0),
+            assimilated_mean.squeeze(axis=0),
+            self.system.cs,
+            sensitivity.squeeze(axis=0),
         )
 
     def _mean_derivative(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        return jax.vmap(self._compute_gradient, (0, 0, None))(
-            observed_true, assimilated, self.system.cs
+        sensitivity = self._compute_sensitivity_asymptotic(
+            self.system, assimilated, self.system.cs
+        )
+
+        return jax.vmap(self._compute_gradient, (0, 0, None, 0))(
+            observed_true, assimilated, self.system.cs, sensitivity
         ).mean(axis=0)
 
     @partial(jax.jit, static_argnames=("self",))
     def _compute_gradient(
-        self, observed_true: jndarray, assimilated: jndarray, cs: jndarray
+        self,
+        observed_true: jndarray,
+        assimilated: jndarray,
+        cs: jndarray,
+        sensitivity: jndarray,
     ) -> jndarray:
         diff = assimilated[self.system.observed_mask] - observed_true
-        sensitivity = self._compute_sensitivity_asymptotic(
-            self.system, assimilated, cs
-        )
         m = sensitivity.shape[1]
         if self._weight is None:
             gradient = diff @ sensitivity.reshape(-1, m).conj()
@@ -106,15 +129,15 @@ class SensitivityGradient(GradientComputer):
         s = system
         om = s.observed_mask
 
-        df_dc = s.df_dc(cs, assimilated)
+        df_dc = jax.vmap(s.df_dc, (None, 0))(cs, assimilated)
 
         if s.observe_all:
             return df_dc / s.mu
         elif not s.use_unobserved_asymptotics:
-            return df_dc[om] / s.mu
+            return df_dc[:, om] / s.mu
         else:
             df_dv_QW0 = _solve_unobserved(assimilated, cs, df_dc, s)
-            return (df_dc[om] + df_dv_QW0[om]) / s.mu
+            return (df_dc[:, om] + df_dv_QW0[:, om]) / s.mu
 
     update_option = property(lambda self: self._update_option)
 
@@ -126,8 +149,8 @@ def _solve_unobserved(
     s = system
     um = s.unobserved_mask
 
-    df_dv = s.df_dv(cs, assimilated)
+    df_dv = jax.vmap(s.df_dv, (None, 0))(cs, assimilated)
 
-    QW0 = jnp.linalg.lstsq(df_dv[um][:, um], -df_dc[um])[0]
+    QW0 = jax.vmap(jnp.linalg.lstsq)(df_dv[:, um][:, :, um], -df_dc[:, um])[0]
 
-    return df_dv[:, um] @ QW0
+    return df_dv[:, :, um] @ QW0

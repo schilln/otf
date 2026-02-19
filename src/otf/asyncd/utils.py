@@ -14,7 +14,6 @@ from ..optim import lr_scheduler
 from ..optim import optimizer as opt
 from ..system import BaseSystem
 from ..time_integration import base as ti_base
-from . import update_utils
 
 jndarray = jnp.ndarray
 
@@ -139,8 +138,6 @@ def run_update(
     if return_all:
         assimilateds = [assimilated0]
 
-    update = update_utils.get_update_function(optimizer)
-
     if weight is None:
         norm = np.linalg.norm
     if weight is not None:
@@ -167,9 +164,7 @@ def run_update(
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = update(
-            optimizer, true_observed[start:end], assimilated[start:]
-        )
+        system.cs = optimizer(true_observed[start:end], assimilated[start:])
         lr_scheduler.step()
     cs.append(system.cs)
 
@@ -215,9 +210,7 @@ def run_update(
 
             # Update parameters
             if t_begin_updates is None or t_begin_updates <= tf:
-                system.cs = update(
-                    optimizer, true_observed[start:end], assimilated[k:]
-                )
+                system.cs = optimizer(true_observed[start:end], assimilated[k:])
                 lr_scheduler.step()
             cs.append(system.cs)
 
