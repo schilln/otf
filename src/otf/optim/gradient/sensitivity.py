@@ -56,8 +56,6 @@ class SensitivityGradient(GradientComputer):
         self.compute_gradient = self._set_up_gradient(update_option)
 
         if update_option is UpdateOption.complete:
-            if not system.observe_all:
-                raise NotImplementedError
             if dt is None:
                 raise ValueError("`dt` must not be None for this update option")
             self._dt = dt
@@ -209,7 +207,7 @@ class SensitivityGradient(GradientComputer):
         sensitivity, _ = self._solver.solve_assimilated(
             sensitivity0, self._dt, tf, self._dt, assimilated
         )
-        return sensitivity.reshape(-1, n, m)
+        return sensitivity.reshape(-1, n, m)[:, self.system.observed_mask]
 
     update_option = property(lambda self: self._update_option)
 
