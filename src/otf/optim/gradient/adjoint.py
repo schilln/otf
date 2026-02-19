@@ -35,15 +35,14 @@ class AdjointGradient(GradientComputer):
     def __init__(
         self,
         system: BaseSystem,
-        dt: float,
         update_option: UpdateOption = UpdateOption.asymptotic,
         solver: tuple[type[SinglestepSolver | MultistepSolver]]
         | type[SinglestepSolver | MultistepSolver]
         | None = None,
+        dt: float | None = None,
         interval_fraction: float = 1,
     ):
         super().__init__(system)
-        self._dt = dt
 
         if not (0 < interval_fraction <= 1):
             raise ValueError(
@@ -55,6 +54,8 @@ class AdjointGradient(GradientComputer):
         self._compute_adjoint = self._set_up_adjoint_method(update_option)
 
         if update_option is not UpdateOption.asymptotic:
+            if dt is None:
+                raise ValueError("`dt` must not be None for this update option")
             if solver is None:
                 raise ValueError(
                     "`solver` must not be None for the given update option"
@@ -62,6 +63,7 @@ class AdjointGradient(GradientComputer):
 
             adjoint_system = self._set_up_adjoint_system(system, update_option)
 
+            self._dt = dt
             self._solver = self._set_up_solver(adjoint_system, solver)
 
     def compute_gradient(
