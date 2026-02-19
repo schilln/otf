@@ -56,11 +56,11 @@ class SensitivityGradient(GradientComputer):
         )
 
         return self._compute_gradient(
-            observed_true[-1],
-            assimilated[-1],
+            observed_true[-1:],
+            assimilated[-1:],
             self.system.cs,
-            sensitivity.squeeze(axis=0),
-        )
+            sensitivity,
+        ).squeeze(axis=0)
 
     def _mean_state(
         self, observed_true: jndarray, assimilated: jndarray
@@ -72,10 +72,10 @@ class SensitivityGradient(GradientComputer):
 
         return self._compute_gradient(
             observed_true.mean(axis=0),
-            assimilated_mean.squeeze(axis=0),
+            assimilated_mean,
             self.system.cs,
-            sensitivity.squeeze(axis=0),
-        )
+            sensitivity,
+        ).squeeze(axis=0)
 
     def _mean_derivative(
         self, observed_true: jndarray, assimilated: jndarray
@@ -84,7 +84,7 @@ class SensitivityGradient(GradientComputer):
             self.system, assimilated, self.system.cs
         )
 
-        return jax.vmap(self._compute_gradient, (0, 0, None, 0))(
+        return self._compute_gradient(
             observed_true, assimilated, self.system.cs, sensitivity
         ).mean(axis=0)
 
@@ -96,12 +96,15 @@ class SensitivityGradient(GradientComputer):
         cs: jndarray,
         sensitivity: jndarray,
     ) -> jndarray:
-        diff = assimilated[self.system.observed_mask] - observed_true
-        m = sensitivity.shape[1]
+        diff = assimilated[:, self.system.observed_mask] - observed_true
         if self._weight is None:
-            gradient = diff @ sensitivity.reshape(-1, m).conj()
+            gradient = (jnp.expand_dims(diff, 1) @ sensitivity.conj()).squeeze(
+                axis=1
+            )
         else:
-            gradient = diff @ self._weight @ sensitivity.reshape(-1, m).conj()
+            gradient = (
+                jnp.expand_dims(diff, 1) @ self._weight @ sensitivity.conj()
+            ).squeeze(axis=1)
         return gradient if cs.dtype == complex else gradient.real
 
     @staticmethod
