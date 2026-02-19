@@ -36,6 +36,7 @@ def run_update(
     return_all: bool = False,
     true_actual: jndarray | None = None,
     weight: jndarray | None = None,
+    num_loops: int = 1,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Use `true_solver` and `assimilated_solver` to run `system` and update
     parameter values with `optimizer`, and return sequence of parameter values
@@ -83,6 +84,8 @@ def run_update(
         shape (N, ...)
     weight
         Weight the error using a (positive definite) matrix.
+    num_loops
+        Number of times to loop over each update interval.
 
     Returns
     -------
@@ -195,26 +198,33 @@ def run_update(
     while tf <= Tf:
         num_steps = assimilated_solver.compute_num_steps(t0, tf, dt) - 1
         end += num_steps
-        assimilated, tls = assimilated_solver.solve_assimilated(
-            assimilated0,
-            t0 - dt * (k - 1),
-            tf,
-            dt,
-            true_observed[start - k : end],
-        )
+
+        if t_begin_updates is None or t_begin_updates <= tf:
+            iters = num_loops
+        else:
+            iters = 1
+
+        for _ in range(iters):
+            assimilated, tls = assimilated_solver.solve_assimilated(
+                assimilated0,
+                t0 - dt * (k - 1),
+                tf,
+                dt,
+                true_observed[start - k : end],
+            )
+
+            # Update parameters
+            if t_begin_updates is None or t_begin_updates <= tf:
+                system.cs = update(
+                    optimizer, true_observed[start:end], assimilated[k:]
+                )
+                lr_scheduler.step()
+            cs.append(system.cs)
 
         if return_all:
             assimilateds.append(assimilated[k:])
 
         assimilated0 = assimilated[-k:]
-
-        # Update parameters
-        if t_begin_updates is None or t_begin_updates <= tf:
-            system.cs = update(
-                optimizer, true_observed[start:end], assimilated[k:]
-            )
-            lr_scheduler.step()
-        cs.append(system.cs)
 
         t0 = tls[-1]
         tf = t0 + t_relax
