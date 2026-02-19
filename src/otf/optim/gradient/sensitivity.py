@@ -97,7 +97,7 @@ class SensitivityGradient(GradientComputer):
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         sensitivity = self._compute_sensitivity_asymptotic(
-            self, assimilated[-1:], self.system.cs
+            assimilated[-1:], self.system.cs
         )
 
         return self._compute_gradient(
@@ -109,7 +109,7 @@ class SensitivityGradient(GradientComputer):
     ) -> jndarray:
         assimilated_mean = assimilated.mean(axis=0, keepdims=True)
         sensitivity = self._compute_sensitivity_asymptotic(
-            self, assimilated_mean, self.system.cs
+            assimilated_mean, self.system.cs
         )
 
         return self._compute_gradient(
@@ -123,7 +123,7 @@ class SensitivityGradient(GradientComputer):
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
         sensitivity = self._compute_sensitivity_asymptotic(
-            self, assimilated, self.system.cs
+            assimilated, self.system.cs
         )
 
         return self._compute_gradient(
@@ -133,7 +133,7 @@ class SensitivityGradient(GradientComputer):
     def _complete(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        sensitivity = self._compute_sensitivity_complete(self, assimilated)
+        sensitivity = self._compute_sensitivity_complete(assimilated)
 
         return self._compute_gradient(
             observed_true, assimilated, self.system.cs, sensitivity
@@ -162,7 +162,6 @@ class SensitivityGradient(GradientComputer):
             )
         return gradient if cs.dtype == complex else gradient.real
 
-    @staticmethod
     @partial(jax.jit, static_argnames="self")
     def _compute_sensitivity_asymptotic(
         self, assimilated: jndarray, cs: jndarray
@@ -196,7 +195,6 @@ class SensitivityGradient(GradientComputer):
             df_dv_QW0 = _solve_unobserved(assimilated, cs, df_dc, s)
             return (df_dc[:, om] + df_dv_QW0[:, om]) / s.mu
 
-    @staticmethod
     def _compute_sensitivity_complete(self, assimilated: jndarray) -> jndarray:
         tn, n = assimilated.shape
         tf = self._dt * tn
