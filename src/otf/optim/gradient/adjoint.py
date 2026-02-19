@@ -134,7 +134,6 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint
 
-    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_complete(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -155,7 +154,6 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint[::-1]
 
-    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_unobserved(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -165,7 +163,6 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint
 
-    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_unobserved_only(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
