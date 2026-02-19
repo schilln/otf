@@ -58,8 +58,14 @@ class SensitivityGradient(GradientComputer):
         if update_option is UpdateOption.complete:
             if dt is None:
                 raise ValueError("`dt` must not be None for this update option")
-            self._dt = dt
+            if solver is None:
+                raise ValueError(
+                    "`solver` must not be None for the given update option"
+                )
+
             sensitivity_system = SensitivitySystem(system)
+
+            self._dt = dt
             self._solver = self._set_up_solver(sensitivity_system, solver)
 
         self._use_unobserved_asymptotics = use_unobserved_asymptotics
