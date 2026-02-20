@@ -199,7 +199,6 @@ class SensitivityGradient(GradientComputer):
             return (df_dc[:, om] + df_dv_QW0[:, om]) / s.mu
 
     @staticmethod
-    @partial(jax.jit, static_argnames="self")
     def _compute_sensitivity_complete(self, assimilated: jndarray) -> jndarray:
         tn, n = assimilated.shape
         tf = self._dt * tn
