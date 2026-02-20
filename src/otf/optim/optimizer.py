@@ -15,7 +15,6 @@ from jax import numpy as jnp
 from ..system.base import BaseSystem
 from . import gradient
 from .base import BaseOptimizer
-from .gradient import sensitivity
 
 jndarray = jnp.ndarray
 
@@ -111,7 +110,7 @@ class LevenbergMarquardt(BaseOptimizer):
         system: BaseSystem,
         learning_rate: float = 1e-3,
         lam: float = 1e-2,
-        gradient_computer: gradient.GradientComputer | None = None,
+        gradient_computer: gradient.SensitivityGradient | None = None,
     ):
         """Perform the Levenberg–Marquardt modification of Gauss–Newton.
 
@@ -122,20 +121,31 @@ class LevenbergMarquardt(BaseOptimizer):
         lam
             Levenberg–Marquardt parameter
         """
+        if not isinstance(gradient_computer, gradient.SensitivityGradient):
+            raise NotImplementedError(
+                "not yet implemented for adjoint-based gradient computation"
+            )
+        if gradient_computer.update_option is not (
+            gradient.sensitivity.UpdateOption.last_state
+        ):
+            raise NotImplementedError(
+                "currently implemented only for last state gradient computation"
+            )
+
         super().__init__(system, gradient_computer)
         self.learning_rate = learning_rate
         self.lam = lam
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
         gradient = self.compute_gradient(observed_true, nudged)
-        return self.step_from_gradient(
-            gradient, observed_true.mean(axis=0), nudged.mean(axis=0)
-        )
+        return self.step_from_gradient(gradient, observed_true, nudged)
 
     def step_from_gradient(
         self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
     ) -> jndarray:
-        w = sensitivity._compute_sensitivity(self.system, nudged)
+        w = self.gradient_computer._compute_sensitivity_asymptotic(
+            self.system, nudged[-1:], self.system.cs
+        ).squeeze(axis=0)
         m = w.shape[1]
         w_2d = w.reshape(-1, m)
         mat = jnp.real(w_2d.conj().T @ w_2d)
