@@ -35,18 +35,27 @@ class AdjointGradient(GradientComputer):
     def __init__(
         self,
         system: BaseSystem,
-        dt: float,
         update_option: UpdateOption = UpdateOption.asymptotic,
         solver: tuple[type[SinglestepSolver | MultistepSolver]]
         | type[SinglestepSolver | MultistepSolver]
         | None = None,
+        dt: float | None = None,
+        interval_fraction: float = 1,
     ):
         super().__init__(system)
-        self._dt = dt
+
+        if not (0 < interval_fraction <= 1):
+            raise ValueError(
+                "`interval_fraction` should be in (0, 1]"
+                f" (was {interval_fraction})"
+            )
+        self._interval_fraction = interval_fraction
 
         self._compute_adjoint = self._set_up_adjoint_method(update_option)
 
         if update_option is not UpdateOption.asymptotic:
+            if dt is None:
+                raise ValueError("`dt` must not be None for this update option")
             if solver is None:
                 raise ValueError(
                     "`solver` must not be None for the given update option"
@@ -54,15 +63,19 @@ class AdjointGradient(GradientComputer):
 
             adjoint_system = self._set_up_adjoint_system(system, update_option)
 
+            self._dt = dt
             self._solver = self._set_up_solver(adjoint_system, solver)
 
     def compute_gradient(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        adjoint = self._compute_adjoint(observed_true, assimilated)
+        frac = self._interval_fraction
+        n = len(observed_true)
+        s_ = jnp.s_[-round(n * frac) :]
+        adjoint = self._compute_adjoint(observed_true[s_], assimilated[s_])
 
         return self._compute_gradient(
-            assimilated, adjoint, self.system.df_dc, self.system.cs
+            assimilated[s_], adjoint, self.system.df_dc, self.system.cs
         )
 
     # Initialization
@@ -121,7 +134,6 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint
 
-    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_complete(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -142,7 +154,6 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint[::-1]
 
-    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_unobserved(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -152,7 +163,6 @@ class AdjointGradient(GradientComputer):
         )
         return adjoint
 
-    @partial(jax.jit, static_argnames=("self",))
     def _compute_adjoint_unobserved_only(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
@@ -171,7 +181,7 @@ class AdjointGradient(GradientComputer):
         adjoint, _ = self._solver.solve_assimilated(
             adjoint0, tf, self._dt, -self._dt, assimilated__observed_diff[::-1]
         )
-        return adjoint[::-1]
+        return adjoint[::-1] / self.system.mu
 
     @staticmethod
     @partial(jax.jit, static_argnames=("df_dc_fn",))
@@ -214,7 +224,8 @@ class CompleteSystem(AdjointSystem):
             assimilated__observed_diff[: self._n],
             assimilated__observed_diff[self._n :].conj(),
         )
-        val = self.df_dv_fn(cs, assimilated).T @ adjoint
+        df_dv = self.df_dv_fn(cs, assimilated)
+        val = adjoint @ df_dv
         val = val.at[self.observed_mask].add(
             self.mu * adjoint[self.observed_mask] + observed_diff
         )
@@ -237,6 +248,6 @@ class UnobservedSystem(AdjointSystem):
         )
 
         df_dv = self.df_dv_fn(cs, assimilated)
-        val = df_dv.T[um][:, um] @ adjoint
-        val = val.at[:].subtract(df_dv[um][:, om] @ observed_diff)
+        val = adjoint @ df_dv[um][:, um]
+        val = val.at[:].subtract(observed_diff @ df_dv[om][:, um])
         return val
