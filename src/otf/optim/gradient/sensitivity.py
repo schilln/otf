@@ -139,7 +139,9 @@ class SensitivityGradient(GradientComputer):
     def _complete(
         self, observed_true: jndarray, assimilated: jndarray
     ) -> jndarray:
-        sensitivity = self._compute_sensitivity_complete(assimilated)
+        sensitivity = self._compute_sensitivity_complete(assimilated)[
+            :, self.system.observed_mask
+        ]
 
         return self._compute_gradient(
             observed_true, assimilated, self.system.cs, sensitivity
@@ -211,7 +213,7 @@ class SensitivityGradient(GradientComputer):
         sensitivity, _ = self._solver.solve_assimilated(
             sensitivity0, self._dt, tf, self._dt, assimilated
         )
-        return sensitivity.reshape(-1, n, m)[:, self.system.observed_mask]
+        return sensitivity.reshape(-1, n, m)
 
     update_option = property(lambda self: self._update_option)
 
