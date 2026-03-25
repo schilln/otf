@@ -225,7 +225,7 @@ class CompleteSystem(AdjointSystem):
             assimilated__observed_diff[self._n :].conj(),
         )
         df_dv = self.df_dv_fn(cs, assimilated)
-        val = adjoint @ df_dv
+        val = -adjoint @ df_dv
         val = val.at[self.observed_mask].add(
             self.mu * adjoint[self.observed_mask] + observed_diff
         )
