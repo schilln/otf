@@ -235,7 +235,7 @@ class SensitivitySystem(System_ModelUnknown):
         sensitivity: jndarray,
     ) -> jndarray:
         sensitivity = sensitivity.reshape(self._n, self._m)
-        val = -self.df_dv_fn(cs, assimilated) @ sensitivity + self.df_dc_fn(
+        val = self.df_dv_fn(cs, assimilated) @ sensitivity + self.df_dc_fn(
             cs, assimilated
         )
         val = val.at[self.observed_mask].subtract(
