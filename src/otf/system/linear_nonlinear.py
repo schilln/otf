@@ -48,9 +48,9 @@ class _TrueLinearNonlinearMixin(_LinearNonlinearMixin):
 
 
 class System_LinearNonlinear_ModelKnown(
-    System_ModelKnown,
     _AssimilatedLinearNonlinearMixin,
     _TrueLinearNonlinearMixin,
+    System_ModelKnown,
 ):
     def __init__(
         self,
@@ -86,8 +86,8 @@ class System_LinearNonlinear_ModelKnown(
 
 
 class System_LinearNonlinear_ModelUnknown(
-    System_ModelUnknown,
     _AssimilatedLinearNonlinearMixin,
+    System_ModelUnknown,
 ):
     def __init__(
         self,
