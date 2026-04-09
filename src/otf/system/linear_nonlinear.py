@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 from jax import numpy as jnp
 
-from . import System_ModelKnown, System_ModelUnknown
+from .base import System_ModelKnown, System_ModelUnknown
 
 jndarray = jnp.ndarray
 
