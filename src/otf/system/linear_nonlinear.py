@@ -14,7 +14,7 @@ class _LinearNonlinearMixin:
         nonlinear_ode: Callable[[jndarray, jndarray], jndarray],
     ) -> Callable[[jndarray, jndarray], jndarray]:
         def ode(cs: jndarray, state: jndarray):
-            return linear(cs) @ state + nonlinear_ode(cs, state)
+            return linear(cs) * state + nonlinear_ode(cs, state)
 
         return ode
 
@@ -40,8 +40,10 @@ class _TrueLinearNonlinearMixin(_LinearNonlinearMixin):
         linear_true: Callable[[jndarray], jndarray],
         nonlinear_true_ode: Callable[[jndarray, jndarray], jndarray],
     ) -> None:
-        self._linear_true = linear_true
-        self._nonlinear_true_ode = nonlinear_true_ode
+        self._linear_true = lambda: linear_true(self.gs)
+        self._nonlinear_true_ode = lambda true: nonlinear_true_ode(
+            self.gs, true
+        )
 
     linear_true = property(lambda self: self._linear_true)
     nonlinear_true_ode = property(lambda self: self._nonlinear_true_ode)
