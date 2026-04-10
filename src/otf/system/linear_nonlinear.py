@@ -33,6 +33,21 @@ class _AssimilatedLinearNonlinearMixin(_LinearNonlinearMixin):
         lambda self: self._nonlinear_assimilated_ode
     )
 
+    def nudged_nonlinear_assimilated_ode(
+        self,
+        cs: jndarray,
+        true_observed: jndarray,
+        assimilated: jndarray,
+    ) -> jndarray:
+        mask = self.observed_mask
+
+        assimilated_p = self.nonlinear_assimilated_ode(cs, assimilated)
+        assimilated_p = assimilated_p.at[mask].subtract(
+            self.mu * (assimilated[mask] - true_observed)
+        )
+
+        return assimilated_p
+
 
 class _TrueLinearNonlinearMixin(_LinearNonlinearMixin):
     def _set_true_parts(
