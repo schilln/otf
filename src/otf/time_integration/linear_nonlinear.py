@@ -1,3 +1,13 @@
+"""Linear-nonlinear time integration schemes.
+
+The implementations in this module follow the descriptions given by Cox and
+Matthews:
+
+    Cox, S. M. and Matthews, P. C. (2002). Exponential Time Differencing for
+    Stiff Systems. Journal of Computational Physics, 176(2), 430-455.
+    doi:10.1006/jcph.2002.6995
+"""
+
 from jax import numpy as jnp
 
 from .base import MultistepSolver, SinglestepSolver
