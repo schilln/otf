@@ -133,7 +133,6 @@ class BaseSystem:
 
     # The following attributes are read-only.
     mu = property(lambda self: self._mu)
-    gs = property(lambda self: self._gs)
     cs = property(lambda self: self._cs, _set_cs)
     observed_mask = property(lambda self: self._observed_mask)
     unobserved_mask = property(lambda self: self._unobserved_mask)
@@ -217,6 +216,7 @@ class System_ModelKnown(BaseSystem):
         """
         return self._true_ode(self.gs, true)
 
+    gs = property(lambda self: self._gs)
     true_observed_mask = property(lambda self: self._true_observed_mask)
 
 
