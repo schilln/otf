@@ -1,3 +1,11 @@
+"""Helpers for systems with a separable linear and nonlinear part.
+
+This module provides mixins and concrete `System_*` subclasses for ODEs that can
+be written as `L(c) * state + N(c, state)` where a parameter-dependent linear
+operator multiplies the state and a separate nonlinear function provides the
+remaining dynamics.
+"""
+
 from collections.abc import Callable
 
 from jax import numpy as jnp
@@ -13,6 +21,12 @@ class _LinearNonlinearMixin:
         linear: Callable[[jndarray], jndarray],
         nonlinear_ode: Callable[[jndarray, jndarray], jndarray],
     ) -> Callable[[jndarray, jndarray], jndarray]:
+        """Return an ODE combining a linear operator and a nonlinear part.
+
+        The returned callable has signature `(cs, state) -> state_dot` and
+        computes `linear(cs) * state + nonlinear_ode(cs, state)`.
+        """
+
         def ode(cs: jndarray, state: jndarray):
             return linear(cs) * state + nonlinear_ode(cs, state)
 
@@ -20,11 +34,15 @@ class _LinearNonlinearMixin:
 
 
 class _AssimilatedLinearNonlinearMixin(_LinearNonlinearMixin):
+    """Mixin adding assimilated-system linear and nonlinear parts."""
+
     def _set_assimilated_parts(
         self,
         linear_assimilated: Callable[[jndarray], jndarray],
         nonlinear_assimilated_ode: Callable[[jndarray, jndarray], jndarray],
     ) -> None:
+        """Store callables describing the assimilated system components."""
+
         self._linear_assimilated = linear_assimilated
         self._nonlinear_assimilated_ode = nonlinear_assimilated_ode
 
@@ -39,6 +57,12 @@ class _AssimilatedLinearNonlinearMixin(_LinearNonlinearMixin):
         true_observed: jndarray,
         assimilated: jndarray,
     ) -> jndarray:
+        """Compute the nonlinear part of assimilated dynamics with nudging.
+
+        This applies the nonlinear assimilated ODE and then subtracts the
+        nudging term on observed entries.
+        """
+
         mask = self.observed_mask
 
         assimilated_p = self.nonlinear_assimilated_ode(cs, assimilated)
@@ -50,11 +74,20 @@ class _AssimilatedLinearNonlinearMixin(_LinearNonlinearMixin):
 
 
 class _TrueLinearNonlinearMixin(_LinearNonlinearMixin):
+    """Mixin adding true-system linear and nonlinear parts for known models."""
+
     def _set_true_parts(
         self,
         linear_true: Callable[[jndarray], jndarray],
         nonlinear_true_ode: Callable[[jndarray, jndarray], jndarray],
     ) -> None:
+        """Bind true-system callables to the stored true parameters `gs`.
+
+        The mixin stores zero-argument or single-argument wrappers that evaluate
+        the provided callables with `self.gs` so the resulting attributes match
+        the expected signatures used elsewhere.
+        """
+
         self._linear_true = lambda: linear_true(self.gs)
         self._nonlinear_true_ode = lambda true: nonlinear_true_ode(
             self.gs, true
@@ -69,6 +102,12 @@ class System_LinearNonlinear_ModelKnown(
     _TrueLinearNonlinearMixin,
     System_ModelKnown,
 ):
+    """Concrete system: known true-model with separable linear/nonlinear parts.
+
+    The class constructs compatible assimilated and true ODEs from provided
+    linear and nonlinear component callables.
+    """
+
     def __init__(
         self,
         mu: float,
@@ -106,6 +145,8 @@ class System_LinearNonlinear_ModelUnknown(
     _AssimilatedLinearNonlinearMixin,
     System_ModelUnknown,
 ):
+    """Concrete system: unknown true-model, only assimilated parts provided."""
+
     def __init__(
         self,
         mu: float,

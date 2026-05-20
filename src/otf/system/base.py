@@ -1,7 +1,7 @@
 """Classes to define systems of differential equations with which to use the
 on-the-fly (OTF) method of data assimilation. Based on the AOT method which
-"nudges" a data assimilated system toward an observed "ground truth" system,
-OTF in addition estimates the model governing the observed system.
+"nudges" a data assimilated system toward an observed "ground truth" system, OTF
+in addition estimates the model governing the observed system.
 """
 
 from collections.abc import Callable
@@ -13,8 +13,12 @@ jndarray = jnp.ndarray
 
 
 class BaseSystem:
-    """A base class for defining systems of differential equations and to which
-    the on-the-fly (OTF) method of data assimilation may be applied.
+    """Base abstraction for a dynamical system used with OTF assimilation.
+
+    This class wraps an ODE for an assimilated system together with nudging
+    behavior that pushes the assimilated state toward observed portions of a
+    (possibly partially observed) true state. Subclasses may provide a known
+    true system or leave the true system unspecified.
     """
 
     def __init__(
@@ -25,31 +29,23 @@ class BaseSystem:
         assimilated_ode: Callable[[jndarray, jndarray], jndarray],
         complex_differentiation: bool = False,
     ):
-        """
+        """Initialize the base system.
 
         Parameters
         ----------
         mu
-            Nudging parameter
+            Nudging parameter.
         cs
-            Estimated parameter values to be used by the data assimilate system,
-            to be estimated/optimized (may or may not correspond to `gs`)
+            Estimated parameter values used by the assimilated system (may
+            differ from the true system parameters `gs` used by subclasses).
         observed_mask
-            Boolean mask denoting the observed part of the data assimilated
-            system states when nudging in `f_assimilated`
+            Boolean `jnp.ndarray` mask indicating observed entries of a
+            flattened state. Nudging is applied only on these entries.
         assimilated_ode
-            Function that computes the time derivative of the data assimilated
-            state using the current estimated parameters `cs`.
-            Parameters: (cs, true_observed, assimilated)
+            Callable `(cs, state) -> state_dot` producing the time derivative
+            for the assimilated system given parameters `cs`.
         complex_differentiation
-            Set to True if state values may take complex values (e.g., if
-            time integrating Fourier coefficients). This allows
-            auto-differentiation to work.
-
-        Methods
-        -------
-        f_assimilated
-            Computes the time derivative of the data assimilated state.
+            If True, treat arrays as potentially complex for autodiff.
         """
         if not isinstance(observed_mask, jndarray):
             raise ValueError(
@@ -99,25 +95,26 @@ class BaseSystem:
         true_observed: jndarray,
         assimilated: jndarray,
     ) -> jndarray:
-        """Computes the time derivative of `assimilated` using `assimilated_ode`
-        followed by nudging the data assimilated system using the observed
-        portion of the the true state, `true_observed`.
+        """Return time derivative of the assimilated state with nudging.
 
-        This function will be jitted.
+        The method applies `assimilated_ode` and then subtracts a nudging term
+        on observed entries: `mu * (assimilated - true_observed)`.
+
+        This method is suitable for JIT compilation.
 
         Parameters
         ----------
         cs
-            Estimated parameter values to be used by the data assimilated system
+            Estimated parameter values for the assimilated ODE.
         true_observed
-            Observed portion of true system system
+            Observed portion of the true state (matches `observed_mask`).
         assimilated
-            Data assimilated system state
+            Current assimilated (flattened) state.
 
         Returns
         -------
-        assimilated_p
-            The time derivative of `assimilated_p`
+        jnp.ndarray
+            Time derivative of `assimilated` after applying nudging.
         """
         mask = self.observed_mask
 
@@ -146,16 +143,10 @@ class BaseSystem:
 
 
 class System_ModelKnown(BaseSystem):
-    """Class for when the true differential equation is known and may be
-    simulated concurrently with the data assimilated system.
+    """System where the true ODE is known and can be simulated.
 
-    See `BaseSystem` for additional documentation.
-
-    Methods
-    -------
-    f_true
-        Computes the time derivative of the true system, given the current
-        state.
+    This subclass stores `gs` (true-system parameters) and a `true_ode` allowing
+    simultaneous integration of the true and assimilated systems.
     """
 
     def __init__(
@@ -169,20 +160,20 @@ class System_ModelKnown(BaseSystem):
         complex_differentiation: bool = False,
         true_observed_mask: jndarray | None = None,
     ):
-        """
+        """Initialize a System_ModelKnown with a provided true ODE.
 
         Parameters
         ----------
         See `BaseSystem` for other parameter definitions.
 
         gs
-            Parameter values to be used by the "true" system
+            True-system parameter values used by `true_ode`.
         true_ode
-            Function that computes the time derivative of the true state
-            Parameters: (gs, true)
+            Callable `(gs, true_state) -> true_state_dot` describing the
+            dynamics of the true system.
         true_observed_mask
-            Boolean mask denoting the observed part of the true system states.
-            If None or not provided, assumed equal to `observed_mask`.
+            Boolean mask indicating observed entries of the true state. If
+            `None`, the value of `observed_mask` is reused.
         """
         super().__init__(
             mu, cs, observed_mask, assimilated_ode, complex_differentiation
@@ -200,19 +191,19 @@ class System_ModelKnown(BaseSystem):
         self,
         true: jndarray,
     ) -> jndarray:
-        """Computes the time derivative of `true` using `true_ode`.
+        """Return the time derivative of the true state using `true_ode`.
 
-        This function will be jitted.
+        This method is suitable for JIT compilation.
 
         Parameters
         ----------
         true
-            True system state
+            Current true (flattened) state.
 
         Returns
         -------
-        true_p
-            The time derivative of `assimilated_p`
+        jnp.ndarray
+            Time derivative of `true`.
         """
         return self._true_ode(self.gs, true)
 
@@ -221,8 +212,11 @@ class System_ModelKnown(BaseSystem):
 
 
 class System_ModelUnknown(BaseSystem):
-    """Class for when the true differential equation is not known and and so may
-    not be simulated concurrently with the data assimilated system.
+    """System where the true ODE is unknown and cannot be simulated.
 
-    See `BaseSystem` for additional documentation.
+    This subclass does not provide a `true_ode` or `gs`; it is suitable when
+    only an assimilated model is available and the true dynamics cannot be
+    integrated alongside the assimilated system.
+
+    See `BaseSystem` for shared behavior and API.
     """

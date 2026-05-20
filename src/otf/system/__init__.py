@@ -1,3 +1,9 @@
+"""Utilities and system classes for OTF data assimilation.
+
+This package exposes base system abstractions and helpers used when constructing
+dynamical systems for on-the-fly (OTF) data assimilation.
+"""
+
 from . import utils
 from .base import BaseSystem, System_ModelKnown, System_ModelUnknown
 from .linear_nonlinear import (
