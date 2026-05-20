@@ -16,6 +16,9 @@ Find missing, outdated, or unclear module, class, method, and function docstring
 - Preserve the project's existing docstring style and terminology.
 - Focus on public API first.
 - Avoid adding docstrings to trivial private helpers unless they materially improve understanding.
+- Use single backticks for inline code.
+- Do not ask follow-up questions unless they are directly required to complete the request.
+- Do not try to steer the user's development process; stay narrowly focused on the docstring task.
 
 ## Approach
 1. Inspect nearby code and existing docstrings to infer the local terminology, style, and public surface.
