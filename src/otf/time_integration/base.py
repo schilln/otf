@@ -18,30 +18,23 @@ jndarray = jnp.ndarray
 
 
 class BaseSolver:
-    """Base class for solving true and data assimilated systems.
+    """Base class for solving true and data-assimilated systems.
 
-    Parameters
-    ----------
-    system
-        An instance of `BaseSystem` to simulate forward in time.
-
-    Methods
-    -------
-    solve_true
-        Given a `System_ModelKnown`, simulate the true system forward in time.
-    solve
-        Simulate true and data assimilated systems forward in time
-        simultaneously.
-
-    Abstract Methods
-    ----------------
-    These must be overridden by subclasses.
-
-    _step_factory
-        Should return `step` functions to be used in `solve` methods.
+    Subclasses must implement the public `solve_true` and `solve` methods (or
+    inherit behavior) and provide `_step_factory` where appropriate. The
+    implementations in this module assume JAX-friendly step functions (e.g.,
+    suitable for use with `lax.fori_loop`).
     """
 
     def __init__(self, system: BaseSystem):
+        """Create a solver for `system`.
+
+        Parameters
+        ----------
+        system
+            An instance of `BaseSystem` to simulate forward in time.
+        """
+
         self._system = system
 
     def _init_solve(
@@ -172,15 +165,24 @@ class BaseSolver:
 
 
 class MultistageSolver(BaseSolver):
-    """Abstract base class for non-multistep solvers (e.g., multistage solvers
-    such as 4th-order Runge–Kutta).
+    """Abstract base for multistage (single-step) integrators.
 
-    These solvers require that the system be of type `System_ModelKnown`, as
-    `solve_true` requires this (of course) and multistage methods seem to
-    require knowledge of the true model when nudging.
+    Multistage solvers (for example, Runge–Kutta methods) take one step at a
+    time and may require access to a fully-known model when performing nudged or
+    assimilated updates. Subclasses should provide `_step_factory` that returns
+    jax-friendly step functions used by `solve`/`solve_true`.
     """
 
     def __init__(self, system: System_ModelKnown):
+        """Create a multistage solver bound to `system`.
+
+        Parameters
+        ----------
+        system
+            A `System_ModelKnown` instance providing `f_true` and related model
+            methods required by multistage integrators.
+        """
+
         assert isinstance(system, System_ModelKnown), (
             "`system` must be of type `System_ModelKnown`"
         )
@@ -269,19 +271,23 @@ class MultistageSolver(BaseSolver):
 
 
 class SinglestepSolver(BaseSolver):
-    """Abstract base class for single-step solvers (e.g., forward Euler or
-    backward Euler).
+    """Abstract base for single-step integrators.
 
-    See documentation for `BaseSolver`.
-
-    Methods
-    -------
-    solve_assimilated
-        Solve data assimilated system forward in time using observations of the
-        true system state.
+    Single-step solvers advance the solution one time level at a time. They are
+    suitable for explicit and implicit one-step methods and expect jax-friendly
+    step functions to be provided by subclasses via `_step_factory`.
     """
 
     def __init__(self, system: BaseSystem):
+        """Create a single-step solver for `system`.
+
+        Parameters
+        ----------
+        system
+            The system to integrate. For `solve_true`, `system` should be a
+            `System_ModelKnown` instance (checked by `solve_true`).
+        """
+
         super().__init__(system)
 
         self._step_true, self._step_assimilated = self._step_factory()
@@ -441,27 +447,13 @@ class SinglestepSolver(BaseSolver):
 
 
 class MultistepSolver(BaseSolver):
-    """Abstract base class for multistep solvers (e.g., two-step
-    Adams–Bashforth).
+    """Abstract base for linear multistep integrators.
 
-    See documentation for `BaseSolver`.
-
-    Methods
-    -------
-    solve_assimilated
-        Solve data assimilated system forward in time using observations of the
-        true system state.
-
-    Attributes
-    ----------
-    k
-        Number of steps used in solver `_k` must be defined by subclasses
-        (accessed through `k` defined in this class as a property).
-
-    Properties
-    ----------
-    uses_multistage
-        True if this solver instance uses a `MultistageSolver` at any point
+    Multistep solvers use several previous time levels to advance the solution
+    (e.g., Adams–Bashforth). Subclasses must set `_k >= 2` to indicate how many
+    history steps they require. A `pre_multistep_solver` may be provided to
+    generate initial history or callers can supply the necessary initial states
+    directly.
     """
 
     def __init__(
