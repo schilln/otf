@@ -1,4 +1,6 @@
-"""Classes to define systems of differential equations with which to use the
+"""System abstractions for on-the-fly (OTF) data assimilation.
+
+Classes to define systems of differential equations with which to use the
 on-the-fly (OTF) method of data assimilation. Based on the AOT method which
 "nudges" a data assimilated system toward an observed "ground truth" system, OTF
 in addition estimates the model governing the observed system.
