@@ -1,3 +1,10 @@
+"""Optimization utilities and implementations used by the package.
+
+This package exposes optimizers, learning-rate schedulers and gradient computers
+used for parameter estimation when assimilating data into `BaseSystem`
+instances.
+"""
+
 from . import gradient
 from .base import (
     OptimizerChain,

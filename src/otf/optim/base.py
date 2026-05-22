@@ -1,27 +1,8 @@
-"""Algorithms to estimate optimal parameters for the nudged system in an
-instance of `..syncd.system.System`.
+"""Optimization utilities for parameter estimation during data assimilation.
 
-Should also work with `..async.system.System`.
-
-Base Classes
-------------
-Optimizer
-    Abstract base class to implement algorithms for optimizing parameters
-
-Helpers
---------------
-PartialOptimizer
-    Class that enables updates only to specified parameters and leaves others
-    unchanged
-Regularizer
-    Class that implements various regularization algorithms
-OptimizerChain
-    Class that chains together `Optimizers`, applying their steps sequentially,
-    e.g., an `Optimizer` followed by a `Regularizer`
-pruned_factory
-    Function that creates a "pruned" type of `System`, permanently setting to
-    zero parameters that fall below a threshold for a specified number of
-    iterations
+This module provides base classes and helpers used to update the `cs` parameters
+of `BaseSystem` instances during data assimilation. See the individual class and
+function docstrings for details and usage examples.
 """
 
 from collections.abc import Callable
@@ -37,42 +18,26 @@ jndarray = jnp.ndarray
 
 
 class BaseOptimizer:
+    """Base interface for optimizers that estimate `BaseSystem` parameters.
+
+    Subclasses must implement `step(observed_true, nudged)` and may override
+    `step_from_gradient`.
+    """
+
     def __init__(
         self,
         system: BaseSystem,
         gradient_computer: gradient.GradientComputer | None = None,
     ):
-        """Abstract base class for optimizers of `System`s to compute updated
-        parameter values.
-
-        Subclasses should implement `step`.
-
-        They may optionally override `__init__` (such as to store other
-        algorithm parameters as attributes), but should call
-        `super().__init__(system)` to properly store `system` as an attribute.
+        """Create a `BaseOptimizer`.
 
         Parameters
         ----------
         system
-            Instance of `System` whose unknown parameters (`system.cs`) are to
-            be optimized
+            `BaseSystem` instance whose `cs` are to be optimized.
         gradient_computer
-            Instance of `optim.gradient.GradientComputer`
-
-        Methods
-        -------
-        __call__
-
-        Attributes
-        ----------
-        system
-            Instance of `BaseSystem` to be optimized
-        weight
-            Matrix used to weight the error, or `None`
-
-        Abstract Methods
-        ----------------
-        step
+            Optional `GradientComputer`; if omitted a sensible default is
+            constructed.
         """
         if gradient_computer is None:
             gradient_computer = gradient.SensitivityGradient(system)
@@ -83,39 +48,47 @@ class BaseOptimizer:
         self.compute_gradient = self._gradient_computer.compute_gradient
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
-        """Compute the step to take to update the parameters of `system`.
+        """Abstract: compute the parameter update vector.
+
+        Subclasses should return the vector that will be added to `system.cs` to
+        obtain the updated parameters.
 
         Parameters
         ----------
         observed_true
-            The observed portion of the true system's state
+            Observed portion of the true system's state (array-like).
         nudged
-            The nudged system's state
+            The nudged/assimilated system's state (array-like).
 
         Returns
         -------
         step
-            The vector to add to `system.cs` to obtain the new parameters
+            Vector to add to `system.cs` to obtain the new parameter values.
         """
 
     def step_from_gradient(
         self, gradient: jndarray, observed_true: jndarray, nudged: jndarray
     ) -> jndarray:
-        """Compute the step to take to update the parameters of `system`.
+        """Optional: compute an update from a precomputed `gradient`.
+
+        Default implementations may delegate to `step`. Subclasses that have
+        closed-form updates from the gradient can override this for speed and
+        clarity.
 
         Parameters
         ----------
         gradient
-            Derivative of error with respect to parameters
+            Derivative of the assimilation error with respect to parameters
+            (same shape as `system.cs`).
         observed_true
-            The observed portion of the true system's state
+            Observed portion of the true system's state (array-like).
         nudged
-            The nudged system's state
+            The nudged/assimilated system's state (array-like).
 
         Returns
         -------
         step
-            The vector to add to `system.cs` to obtain the new parameters
+            Vector to add to `system.cs` to obtain the new parameter values.
         """
 
     def __call__(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
@@ -142,25 +115,26 @@ class BaseOptimizer:
 
 
 class PartialOptimizer(BaseOptimizer):
+    """Wrap an optimizer to update only a subset of parameters.
+
+    The wrapped optimizer computes a full update vector; `PartialOptimizer`
+    masks that update so only selected indices in `system.cs` are changed.
+    """
+
     def __init__(
         self,
         optimizer: BaseOptimizer,
         param_idx: jndarray | None = None,
     ):
-        """Optimize only specified parameters.
+        """Initialize the wrapper.
 
         Parameters
         ----------
         optimizer
-            An optimizer that will be used to perform parameter updates,
-            ignoring updates to parameters not specified in `param_idx`.
+            Base optimizer used to compute the full parameter update.
         param_idx
-            An array specifying the parameters to be updated. The updates for
-            other parameters will be set to zero.
-
-            For example, to update only the first, third, and fourth parameters
-            (as determined from the ordering of `system.cs` for a given instance
-            of `System`), one would use `np.array([0, 2])`.
+            Indices of `system.cs` that should be updated. Provide an explicit
+            array-like index (e.g. `np.array([0, 2])`).
         """
         # Define the attributes that belong to this class (versus those of the
         # wrapped class) so they can be distinguished and routed properly.
@@ -196,6 +170,13 @@ class PartialOptimizer(BaseOptimizer):
 
 
 class Regularizer(BaseOptimizer):
+    """Produce parameter-space penalties used as a regularization term.
+
+    The `step` method returns the negative derivative of the regularization
+    penalty (same shape as `system.cs`) and can be combined with a
+    gradient-based optimizer.
+    """
+
     def __init__(
         self,
         system: BaseSystem,
@@ -203,27 +184,21 @@ class Regularizer(BaseOptimizer):
         prior: jndarray | None = None,
         callable_is_derivative: bool | None = None,
     ):
-        """Use regularization on the parameters of `System`.
+        """Initialize a `Regularizer`.
 
         Parameters
         ----------
         ord
-            If a float, take the regularizing function/penalty on the parameters
-            to be the `ord`-norm of the parameters.
-            If a callable, see `callable_is_derivative`.
+            If an int/float, interpreted as the `ord`-norm penalty (1 or 2
+            supported explicitly). If a callable, see `callable_is_derivative`.
         prior
-            The prior expected values of the parameters, i.e., distance of the
-            parameters from the prior will be penalized.
-            If not given or None, taken to be zero (as in typical
-            regularization).
-            Must be the same shape as `system.cs`.
+            Optional prior parameter vector; penalty is applied to `(cs -
+            prior)`. If omitted, the prior is taken to be zero.
         callable_is_derivative
-            The following rules apply if `ord` is a callable:
-            If True, `ord` should return an array of the same size as the input
-            (i.e., as `system.cs`).
-            If False, `ord` is taken to be the regularizing function/penalty on
-            the parameters, and will be auto-differentiated to compute its
-            derivative with respect to the parameters.
+            If `ord` is callable, set to True when `ord` already returns the
+            derivative (an array shaped like `system.cs`); set to False when
+            `ord` returns a scalar penalty and its derivative should be
+            auto-differentiated.
         """
         if prior is None:
             self._prior = jnp.zeros_like(system.cs)
@@ -262,6 +237,11 @@ class Regularizer(BaseOptimizer):
         self._callable_is_derivative = callable_is_derivative
 
     def step(self, *_):
+        """Return the negative derivative of the regularization penalty.
+
+        The returned array has the same shape as `system.cs` and can be added to
+        a gradient-based update.
+        """
         ord, prior = self.ord, self.prior
         cs = self.system.cs
         match ord:
@@ -287,6 +267,8 @@ class Regularizer(BaseOptimizer):
 
 
 class OptimizerChain(BaseOptimizer):
+    """Combine several optimizers by summing their weighted updates."""
+
     def __init__(
         self,
         system: BaseSystem,
@@ -294,23 +276,25 @@ class OptimizerChain(BaseOptimizer):
         optimizers: list[BaseOptimizer],
         weights: list[float],
     ):
-        """Use several `Optimizer`s together, such as gradient descent with
-        regularization.
+        """Initialize an `OptimizerChain`.
 
         Parameters
         ----------
         learning_rate
-            The amount by which to scale the total update/step size
+            Scalar applied to the total weighted update (controls overall step
+            size).
         optimizers
-            A list of `Optimizer`s whose updates to the parameters of `system`
-            will be summed.
-            It may be convenient to set the learning rate of each optimizer (if
-            available) to one, since this class also uses a learning rate and
-            relative weights.
+            Sequence of `BaseOptimizer` instances whose `step` results will be
+            combined. All optimizers should target the same `system`.
         weights
-            The relative weights to place on each optimizer's step. Each weight
-            will be divided by the sum of all weights so that sum of the weights
-            is one.
+            Sequence of relative weights (one per optimizer). These are
+            normalized internally so their sum is one.
+
+        Notes
+        -----
+        It can be convenient to set each individual optimizer's internal
+        learning rate to 1.0 and control the combined step size with
+        `learning_rate` supplied here.
         """
         assert len(optimizers) == len(weights), (
             "`optimizers` and `weights` should have same length"
@@ -362,19 +346,17 @@ def pruned_factory(system_type: type[BaseSystem]) -> type[BaseSystem]:
             ----------
             threshold
                 If a float, all parameters `cs` are compared against this common
-                value.
-                If an array, each parameter is compared against the value in
-                `cs` in the same position.
-                To disable pruning for a parameter, set its threshold to zero.
+                value. If an array, each parameter is compared against the value
+                in `cs` in the same position. To disable pruning for a
+                parameter, set its threshold to zero.
             iterations
                 Require each parameter to be less than its corresponding
                 threshold at least `iterations` times consecutively before
-                setting it to zero (permanently).
-                As with `threshold`, if an `int`, each parameter will use this
-                common value, but if an array, then each parameter will use its
-                corresponding value.
-                If None, only one time being less than `threshold` is needed
-                to set a parameter to zero.
+                setting it to zero (permanently). As with `threshold`, if an
+                `int`, each parameter will use this common value, but if an
+                array, then each parameter will use its corresponding value. If
+                None, only one time being less than `threshold` is needed to set
+                a parameter to zero.
             """
             super().__init__(*args, **kwargs)
 
@@ -403,8 +385,8 @@ def pruned_factory(system_type: type[BaseSystem]) -> type[BaseSystem]:
             self._counter = np.zeros_like(self.cs, dtype=int)
 
         def _set_cs(self, cs):
-            # For parameters under the threshold, set the mask to True.
-            # Don't change the mask where it already was True.
+            # For parameters under the threshold, set the mask to True. Don't
+            # change the mask where it already was True.
             below_threshold = np.abs(self.cs) < self.threshold
 
             # Increment the counter to parameters below their threshold and
