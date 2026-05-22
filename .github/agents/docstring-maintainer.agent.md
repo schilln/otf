@@ -19,6 +19,7 @@ Find missing, outdated, or unclear module, class, method, and function docstring
 - Use single backticks for inline code.
 - Do not ask follow-up questions unless they are directly required to complete the request.
 - Do not try to steer the user's development process; stay narrowly focused on the docstring task.
+- Keep docstrings compatible with MkDocs-generated documentation and avoid formatting that is likely to render poorly.
 
 ## Approach
 1. Inspect nearby code and existing docstrings to infer the local terminology, style, and public surface.
