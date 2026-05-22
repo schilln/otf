@@ -1,11 +1,16 @@
-"""Linear-nonlinear time integration schemes.
+"""Linear–nonlinear time-integration schemes.
 
-The implementations in this module follow the descriptions given by Cox and
-Matthews:
+This module implements a set of time-integration schemes that split a system
+into a linear part (handled analytically or implicitly) and a nonlinear part
+handled explicitly. Implementations follow Cox & Matthews (2002) where
+applicable and include exponential time differencing (ETD) and several multistep
+predictor/corrector hybrids.
 
-    Cox, S. M. and Matthews, P. C. (2002). Exponential Time Differencing for
-    Stiff Systems. Journal of Computational Physics, 176(2), 430-455.
-    doi:10.1006/jcph.2002.6995
+References
+----------
+Cox, S. M. and Matthews, P. C. (2002). Exponential Time Differencing for Stiff
+Systems. Journal of Computational Physics, 176(2), 430-455.
+doi:10.1006/jcph.2002.6995
 """
 
 from jax import numpy as jnp
@@ -16,6 +21,13 @@ jndarray = jnp.ndarray
 
 
 class ETD1(SinglestepSolver):
+    """First-order exponential time-differencing (ETD1) single-step solver.
+
+    Uses an analytic integration of the linear part and a first-order update for
+    the nonlinear contribution. Suitable for problems where the linear operator
+    can be diagonalized/represented elementwise.
+    """
+
     def _step_factory(self):
         def step_true(i, vals):
             l, nl_fn = self.system.linear_true(), self.system.nonlinear_true_ode
@@ -59,6 +71,12 @@ class ETD1(SinglestepSolver):
 
 
 class ETD2(MultistepSolver):
+    """Second-order exponential time-differencing multistep solver (ETD2).
+
+    A two-step ETD method that combines exact linear evolution with a
+    second-order treatment of nonlinear terms.
+    """
+
     _k = 2
 
     def _step_factory(self):
@@ -121,6 +139,12 @@ class ETD2(MultistepSolver):
 
 
 class AB2AM2(MultistepSolver):
+    """Adams–Bashforth 2 predictor with Adams–Moulton 2 corrector (AB2-AM2).
+
+    A two-step predictor/corrector hybrid that treats the linear part implicitly
+    (AM2 corrector) and the nonlinear part explicitly (AB2 predictor).
+    """
+
     _k = 2
 
     def _step_factory(self):
@@ -167,6 +191,13 @@ class AB2AM2(MultistepSolver):
 
 
 class AB2BD2(MultistepSolver):
+    """Adams–Bashforth 2 predictor combined with a BDF/Backward-Differentiation
+    style second-order corrector (AB2-BD2).
+
+    A two-step hybrid that uses an explicit AB2 prediction and a stabilized
+    second-order corrector for stiff linear components.
+    """
+
     _k = 2
 
     def _step_factory(self):

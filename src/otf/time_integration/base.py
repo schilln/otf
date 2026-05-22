@@ -1,4 +1,10 @@
-"""Abstract base classes to simulate `System`s forward in time."""
+"""Abstract base classes to simulate `System`s forward in time.
+
+This module provides abstract solver base classes used throughout the
+`otf.time_integration` package. Implementations here are designed to work with
+JAX (e.g., `lax.fori_loop`) and describe the expected solver public interface:
+`BaseSolver`, `SinglestepSolver`, `MultistageSolver`, and `MultistepSolver`.
+"""
 
 from collections.abc import Callable
 from functools import cached_property
@@ -58,10 +64,11 @@ class BaseSolver:
 
         Returns
         -------
-        state0
-            Array initialized with inf with the shape to hold N steps of the
-            system state
-            shape (N, *state0.shape)
+        state
+            Array initialized with `jnp.inf` sized to hold N steps of the system
+            state. Shape is `(N, state_dim)` where `state_dim` is
+            `state0.shape[-1]`. Rows corresponding to the provided `state0` are
+            filled with the initial history values.
         tls
             The time linspace
         """
@@ -448,9 +455,8 @@ class MultistepSolver(BaseSolver):
     Attributes
     ----------
     k
-        Number of steps used in solver
-        `_k` must be defined by subclasses (accessed through `k` defined in this
-        class as a property).
+        Number of steps used in solver `_k` must be defined by subclasses
+        (accessed through `k` defined in this class as a property).
 
     Properties
     ----------
@@ -461,14 +467,17 @@ class MultistepSolver(BaseSolver):
     def __init__(
         self, system: BaseSystem, pre_multistep_solver: BaseSolver | None = None
     ):
-        """
+        """Initialize a multistep solver.
 
         Parameters
         ----------
+        system
+            The system to integrate.
         pre_multistep_solver
-            An instantiated `BaseSolver` to use until enough steps have been
-            taken to use the multistep solver, or None (in which case sufficient
-            initial steps must be given for each solve)
+            An instantiated `BaseSolver` used to generate initial history steps
+            until enough values are available to run the multistep method. If
+            `None`, callers must supply the necessary initial history when
+            invoking `solve`/`solve_true`.
         """
         super().__init__(system)
 
@@ -680,9 +689,8 @@ class MultistepSolver(BaseSolver):
         if len0 < self.k and isinstance(
             self._pre_multistep_solver, MultistageSolver
         ):
-            # Need k-1 previous steps to use k-step solver.
-            # The time span is [t0, t0 + dt, ..., t0 + dt * (k-1)],
-            # for a total of k steps.
+            # Need k-1 previous steps to use k-step solver. The time span is
+            # [t0, t0 + dt, ..., t0 + dt * (k-1)], for a total of k steps.
             true0, assimilated0, _ = self._pre_multistep_solver.solve(
                 true0, assimilated0, t0, t0 + dt * (self.k - 1), dt
             )
