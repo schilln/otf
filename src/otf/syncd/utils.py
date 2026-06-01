@@ -1,10 +1,12 @@
-"""Helpful code for simulating systems and updating parameters.
+"""Utilities for running synchronized simulations and parameter updates.
 
-Functions
----------
-run_update
-    Iteratively simulates a `System` and updates parameter values, returning the
-    sequences of parameter values and data assimilated-vs-true errors.
+This module provides helpers to run a `System` forward in time using a
+`time_integration.BaseSolver` and to perform periodic parameter updates (for
+example via a callable optimizer or an instance of `optim.base.BaseOptimizer`).
+The primary public API is `run_update` which returns the parameter history,
+relative errors, the times of updates, and the simulated true and assimilated
+trajectories (either for the final relaxation window or for the whole simulation
+when `return_all=True`).
 """
 
 from collections.abc import Callable
@@ -37,66 +39,53 @@ def run_update(
     t_begin_updates: float | None = None,
     return_all: bool = False,
 ) -> tuple[jndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Use `solver` to run `system` and update parameter values with
-    `optimizer`, and return sequence of parameter values and errors between
-    data assimilated and true states.
+    """Run `system` forward and perform periodic parameter updates.
+
+    The function advances `system` from time `T0` toward `Tf` in blocks of
+    approximately `t_relax` (rounded to multiples of `dt`) using `solver`. After
+    each block it updates `system.cs` using `optimizer` (a callable or a
+    `optim.base.BaseOptimizer`), optionally adjusting the learning rate via
+    `lr_scheduler`.
 
     Parameters
     ----------
     system
-        The system to simulate
+        The system to simulate.
     solver
-        An instance of `base_solver.Solver` to simulate `system`
+        A `time_integration.BaseSolver` instance for stepping the dynamics.
     dt
-        The step size to use in `solver`
-    T0
-        The initial time at which to begin simulation
-    Tf
-        The (approximate) final time for simulation. This function will use as
-        many multiples of `dt` as possible without simulating longer than `Tf`.
+        Time-step size passed to `solver`.
+    T0, Tf
+        Initial and (approximate) final times for the simulation.
     t_relax
-        The (approximate) length of time to simulate system between parameter
-        updates. This function will use as many multiples of `dt` as possible
-        without simulating longer than `t_relax` between parameter updates.
-    true0
-        The initial state of the true system
-    assimilated0
-        The initial state of the data assimilated system
+        Approximate duration between parameter updates.
+    true0, assimilated0
+        Initial states for the true and assimilated systems (arrays compatible
+        with `solver`).
     optimizer
-        A callable that accepts the observed portion of the true system state
-        and the data assimilated system state and returns updated `system`
-        parameters.
-
-        Note that an instance of `base_optim.Optimizer` implements this
-        interface.
-        If None, defaults to `base_optim.LevenbergMarquardt`.
+        Callable or `optim.base.BaseOptimizer` used to compute the next
+        `system.cs` from observed portions of the trajectories. If None a
+        default `opt.LevenbergMarquardt` is used.
     lr_scheduler
-        Instance of `base_optim.LRScheduler` to update optimizer learning rate.
-    t_begin_updates: float | None = None,
-        Perform parameter updates after this time.
+        An `lr_scheduler.LRScheduler` instance to step each update (defaults to
+        a dummy no-op scheduler).
+    t_begin_updates
+        If provided, updates are skipped until simulation time exceeds this
+        value.
     return_all
-        If true, return true and data assimilated states for entire simulation.
+        When True, return the full simulated trajectories for all time blocks;
+        otherwise return only the last block's trajectories.
 
     Returns
     -------
-    cs
-        The sequence of parameter values
-        shape (N + 1, d) where d is the number of parameters being estimated and
-            N is the number of parameter updates performed (the first row is the
-            initial set of parameter values).
-    errors
-        The sequence of errors between the true and data assimilated systems
-        shape (N,) where N is the number of parameter updates performed
-    tls
-        The actual linspace of time values used, in multiples of `t_relax` from
-        `T0` to approximately `Tf`
-        shape (N + 1,) where N is the number of parameter updates performed
-    true
-        True states for final iteration of length `t_relax`,
-        or if `return_all` is True, then true states for entire simulation.
-    assimilated
-        Data assimilated states for final iteration of length `t_relax`,
-        or if `return_all` is True, then assimilated states for entire simulation.
+    tuple
+        `(cs, errors, tls, true, assimilated)` where
+            - `cs` is an array of parameter vectors, shape `(N+1, d)`;
+            - `errors` is a 1-D array of relative errors, shape `(N,)`;
+            - `tls` is the time array for update times, shape `(N+1,)`;
+            - `true` and `assimilated` are the final true assimilated states for
+              the last interval or the full concatenated states if `return_all`
+              is True.
     """
     if optimizer is None:
         optimizer = opt.LevenbergMarquardt(system)
