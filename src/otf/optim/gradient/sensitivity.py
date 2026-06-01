@@ -80,7 +80,7 @@ class SensitivityGradient(GradientComputer):
                     "`solver` must not be None for the given update option"
                 )
 
-            sensitivity_system = SensitivitySystem(system)
+            sensitivity_system = _SensitivitySystem(system)
 
             self._dt = dt
             self._solver = self._set_up_solver(sensitivity_system, solver)
@@ -235,7 +235,7 @@ class SensitivityGradient(GradientComputer):
     update_option = property(lambda self: self._update_option)
 
 
-class SensitivitySystem(System_ModelUnknown):
+class _SensitivitySystem(System_ModelUnknown):
     def __init__(self, system: BaseSystem):
         super().__init__(
             None, None, system.observed_mask, system.assimilated_ode

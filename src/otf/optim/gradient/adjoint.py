@@ -118,12 +118,12 @@ class AdjointGradient(GradientComputer):
         self,
         system: BaseSystem,
         update_option: UpdateOption,
-    ) -> AdjointSystem:
+    ) -> _AdjointSystem:
         """Create the adjoint system."""
         if update_option is UpdateOption.complete:
-            return CompleteSystem(system)
+            return _CompleteSystem(system)
         elif update_option is UpdateOption.unobserved:
-            return UnobservedSystem(system)
+            return _UnobservedSystem(system)
         else:
             raise ValueError("update option is not supported")
 
@@ -220,7 +220,7 @@ class AdjointGradient(GradientComputer):
         return gradient if cs.dtype == complex else gradient.real
 
 
-class AdjointSystem(System_ModelUnknown):
+class _AdjointSystem(System_ModelUnknown):
     def __init__(self, system: BaseSystem):
         super().__init__(
             None, None, system.observed_mask, system.assimilated_ode
@@ -235,7 +235,7 @@ class AdjointSystem(System_ModelUnknown):
     df_dv_fn = property(lambda self: self._system.df_dv)
 
 
-class CompleteSystem(AdjointSystem):
+class _CompleteSystem(_AdjointSystem):
     def f_assimilated(
         self,
         cs: jndarray,
@@ -254,7 +254,7 @@ class CompleteSystem(AdjointSystem):
         return val
 
 
-class UnobservedSystem(AdjointSystem):
+class _UnobservedSystem(_AdjointSystem):
     def f_assimilated(
         self,
         cs: jndarray,
