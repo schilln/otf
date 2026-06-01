@@ -6,7 +6,19 @@ jndarray = jnp.ndarray
 
 
 class GradientComputer:
+    """Base class for objects that compute gradients of the assimilation error.
+
+    Subclasses implement `compute_gradient(observed_true, assimilated)`.
+    """
+
     def __init__(self, system: BaseSystem):
+        """Create a `GradientComputer` bound to `system`.
+
+        Parameters
+        ----------
+        system
+            `BaseSystem` instance for which gradients are computed.
+        """
         self._system = system
         self._weight = None
 
