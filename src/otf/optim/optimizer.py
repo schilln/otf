@@ -1,12 +1,8 @@
-"""
+"""Optimization algorithms for estimating unknown system parameters.
 
-Classes Implementing Optimization Algorithms
---------------------------------------------
-GradientDescent
-WeightedLevenbergMarquardt
-LevenbergMarquardt
-OptaxWrapper
-    Wraps a given optax optimizer as an `Optimizer`
+This module provides concrete implementations of `BaseOptimizer` used to update
+the `cs` parameters of a `BaseSystem` instance, including simple gradient
+descent, Levenberg–Marquardt variants, and an adapter for Optax optimizers.
 """
 
 import optax
@@ -20,12 +16,22 @@ jndarray = jnp.ndarray
 
 
 class DummyOptimizer(BaseOptimizer):
+    """Optimizer that performs no parameter updates (useful for testing)."""
+
     def __init__(
         self,
         system: BaseSystem,
         gradient_computer: gradient.GradientComputer | None = None,
     ):
-        """Don't perform parameter updates."""
+        """Initialize the dummy optimizer.
+
+        Parameters
+        ----------
+        system
+            Target `BaseSystem` instance.
+        gradient_computer
+            Optional `GradientComputer`.
+        """
         super().__init__(system, gradient_computer)
 
     def step(self, observed_true: jndarray, nudged: jndarray) -> jndarray:
@@ -38,20 +44,20 @@ class DummyOptimizer(BaseOptimizer):
 
 
 class GradientDescent(BaseOptimizer):
+    """Simple gradient-descent optimizer."""
+
     def __init__(
         self,
         system: BaseSystem,
         learning_rate: float = 1e-4,
         gradient_computer: gradient.GradientComputer | None = None,
     ):
-        """Perform gradient descent.
-
-        See documentation of `Optimizer`.
+        """Create a gradient-descent optimizer.
 
         Parameters
         ----------
         learning_rate
-            The learning rate to use in gradient descent
+            Scalar learning rate used to scale the negative gradient.
         """
         super().__init__(system, gradient_computer)
         self.learning_rate = learning_rate
@@ -67,6 +73,8 @@ class GradientDescent(BaseOptimizer):
 
 
 class WeightedLevenbergMarquardt(BaseOptimizer):
+    """Weighted Levenberg–Marquardt optimizer (Gauss–Newton variant)."""
+
     def __init__(
         self,
         system: BaseSystem,
@@ -105,6 +113,8 @@ class WeightedLevenbergMarquardt(BaseOptimizer):
 
 
 class LevenbergMarquardt(BaseOptimizer):
+    """Levenberg–Marquardt optimizer using sensitivity-based gradients."""
+
     def __init__(
         self,
         system: BaseSystem,
@@ -112,14 +122,18 @@ class LevenbergMarquardt(BaseOptimizer):
         lam: float = 1e-2,
         gradient_computer: gradient.SensitivityGradient | None = None,
     ):
-        """Perform the Levenberg–Marquardt modification of Gauss–Newton.
+        """Levenberg–Marquardt optimizer using sensitivity-based gradients.
+
+        This implementation requires a `SensitivityGradient` instance and is
+        currently implemented only for the `UpdateOption.last_state` update
+        method of the gradient computer.
 
         Parameters
         ----------
         learning_rate
-            The learning rate (scalar by which to multiply the step)
+            Scalar multiplier applied to the computed step.
         lam
-            Levenberg–Marquardt parameter
+            Levenberg–Marquardt damping parameter.
         """
         if not isinstance(gradient_computer, gradient.SensitivityGradient):
             raise NotImplementedError(
@@ -158,6 +172,8 @@ class LevenbergMarquardt(BaseOptimizer):
 
 
 class OptaxWrapper(BaseOptimizer):
+    """Adapter that wraps an Optax optimizer as a `BaseOptimizer`."""
+
     def __init__(
         self,
         system: BaseSystem,
@@ -169,8 +185,8 @@ class OptaxWrapper(BaseOptimizer):
         Parameters
         ----------
         optimizer
-            Instance of `optax.GradientTransformationExtraArgs`
-            For example, `optax.adam(learning_rate=1e-1)`.
+            Instance of `optax.GradientTransformationExtraArgs` For example,
+            `optax.adam(learning_rate=1e-1)`.
         """
         super().__init__(system, gradient_computer)
         self.optimizer = optimizer

@@ -34,6 +34,12 @@ class UpdateOption(Enum):
 
 
 class SensitivityGradient(GradientComputer):
+    """Compute gradients using sensitivity (forward) equations.
+
+    Different `UpdateOption`s select how the sensitivity information is
+    assembled (last state, mean state, mean gradient, or complete simulation).
+    """
+
     def __init__(
         self,
         system: BaseSystem,
@@ -44,11 +50,22 @@ class SensitivityGradient(GradientComputer):
         dt: float | None = None,
         use_unobserved_asymptotics: bool = False,
     ):
-        """
+        """Initialize a `SensitivityGradient`.
+
+        Parameters
+        ----------
+        system
+            `BaseSystem` instance to analyze.
+        update_option
+            Strategy for forming the gradient (`UpdateOption`).
+        solver
+            Solver class or tuple of solver classes used when the `complete`
+            update option is selected.
+        dt
+            Time-step used with the solver (required when `solver` is used).
         use_unobserved_asymptotics
-            Set to true to attempt to use additional asymptotic information from
-            "unobserved" portion of simulated state. This doesn't have full
-            mathematical support.
+            When True attempt to use asymptotic information from unobserved
+            state components (experimental).
         """
         super().__init__(system)
 
@@ -63,7 +80,7 @@ class SensitivityGradient(GradientComputer):
                     "`solver` must not be None for the given update option"
                 )
 
-            sensitivity_system = SensitivitySystem(system)
+            sensitivity_system = _SensitivitySystem(system)
 
             self._dt = dt
             self._solver = self._set_up_solver(sensitivity_system, solver)
@@ -218,7 +235,7 @@ class SensitivityGradient(GradientComputer):
     update_option = property(lambda self: self._update_option)
 
 
-class SensitivitySystem(System_ModelUnknown):
+class _SensitivitySystem(System_ModelUnknown):
     def __init__(self, system: BaseSystem):
         super().__init__(
             None, None, system.observed_mask, system.assimilated_ode

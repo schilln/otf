@@ -32,6 +32,11 @@ class UpdateOption(Enum):
 
 
 class AdjointGradient(GradientComputer):
+    """Compute parameter gradients using adjoint-based methods.
+
+    Supports different update strategies controlled by `UpdateOption`.
+    """
+
     def __init__(
         self,
         system: BaseSystem,
@@ -42,6 +47,23 @@ class AdjointGradient(GradientComputer):
         dt: float | None = None,
         interval_fraction: float = 1,
     ):
+        """Initialize an `AdjointGradient`.
+
+        Parameters
+        ----------
+        system
+            `BaseSystem` instance to analyze.
+        update_option
+            Which adjoint/update method to use (`UpdateOption`).
+        solver
+            Solver class or tuple of solver classes used when simulation-based
+            adjoint computation is selected (`complete` or `unobserved`).
+        dt
+            Time-step used with the solver (required when `solver` is used).
+        interval_fraction
+            Fraction of the input time series to use for gradient computation
+            (value in (0, 1]).
+        """
         super().__init__(system)
 
         if not (0 < interval_fraction <= 1):
@@ -96,12 +118,12 @@ class AdjointGradient(GradientComputer):
         self,
         system: BaseSystem,
         update_option: UpdateOption,
-    ) -> AdjointSystem:
+    ) -> _AdjointSystem:
         """Create the adjoint system."""
         if update_option is UpdateOption.complete:
-            return CompleteSystem(system)
+            return _CompleteSystem(system)
         elif update_option is UpdateOption.unobserved:
-            return UnobservedSystem(system)
+            return _UnobservedSystem(system)
         else:
             raise ValueError("update option is not supported")
 
@@ -198,7 +220,7 @@ class AdjointGradient(GradientComputer):
         return gradient if cs.dtype == complex else gradient.real
 
 
-class AdjointSystem(System_ModelUnknown):
+class _AdjointSystem(System_ModelUnknown):
     def __init__(self, system: BaseSystem):
         super().__init__(
             None, None, system.observed_mask, system.assimilated_ode
@@ -213,7 +235,7 @@ class AdjointSystem(System_ModelUnknown):
     df_dv_fn = property(lambda self: self._system.df_dv)
 
 
-class CompleteSystem(AdjointSystem):
+class _CompleteSystem(_AdjointSystem):
     def f_assimilated(
         self,
         cs: jndarray,
@@ -232,7 +254,7 @@ class CompleteSystem(AdjointSystem):
         return val
 
 
-class UnobservedSystem(AdjointSystem):
+class _UnobservedSystem(_AdjointSystem):
     def f_assimilated(
         self,
         cs: jndarray,

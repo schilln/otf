@@ -1,15 +1,8 @@
-"""
+"""Learning-rate schedulers for optimizers.
 
-Base Classes
-------------
-LRScheduler
-    Abstract base class to implement learning rate scheduling
-
-Classes Implementing Learning Rate Scheduling
----------------------------------------------
-DummyLRScheduler
-ExponentialLR
-MultiStepLR
+Provides a small set of scheduler helpers that adjust an optimizer's
+`learning_rate` attribute over time. Implementations are lightweight and
+intended to be used with `BaseOptimizer` instances in the `optim` package.
 """
 
 from collections import Counter
@@ -18,9 +11,18 @@ from .base import BaseOptimizer
 
 
 class LRScheduler:
+    """Abstract base for learning-rate schedulers that modify an optimizer's
+    `learning_rate` attribute.
+    """
+
     def __init__(self, optimizer: BaseOptimizer):
-        """Given an `optimizer` with a `learning_rate` attribute, adjust its
-        learning rate according to some algorithm.
+        """Create a scheduler bound to `optimizer`.
+
+        Parameters
+        ----------
+        optimizer
+            `BaseOptimizer` instance whose `learning_rate` attribute will be
+            adjusted.
         """
         self.optimizer = optimizer
 
@@ -29,9 +31,12 @@ class LRScheduler:
 
 
 class DummyLRScheduler(LRScheduler):
+    """No-op scheduler for testing and compatibility."""
+
     def __init__(self, *args, **kwargs):
-        """A dummy learning rate scheduler for testing with code that assumes
-        use of a scheduler.
+        """Initialize a dummy scheduler (accepts arbitrary args).
+
+        This scheduler performs no action when `step` is called.
         """
         pass
 
@@ -40,17 +45,19 @@ class DummyLRScheduler(LRScheduler):
 
 
 class ExponentialLR(LRScheduler):
+    """Multiply an optimizer's learning rate by a constant factor on each
+    `step()` call.
+    """
+
     def __init__(self, optimizer: BaseOptimizer, gamma: float = 0.99):
-        """Multiply the optimizer's learning rate by a factor each time the
-        method `step` is called.
+        """Initialize the exponential scheduler.
 
         Parameters
         ----------
         optimizer
-            An instance of `Optimizer` with a `learning_rate` attribute.
+            An instance of `BaseOptimizer` with a `learning_rate` attribute.
         gamma
-            Multiply the learning rate of `optimizer` by `gamma` with every call
-            to `step`.
+            Factor to multiply the learning rate by on each `step`.
         """
         super().__init__(optimizer)
         self.gamma = gamma
@@ -60,29 +67,26 @@ class ExponentialLR(LRScheduler):
 
 
 class MultiStepLR(LRScheduler):
+    """Reduce learning rate at specified step milestones."""
+
     def __init__(
         self,
         optimizer: BaseOptimizer,
         milestones: list[int] | tuple[int],
         gamma: float = 0.5,
     ):
-        """At each given milestone (number of iterations), multiply the learning
-        rate by a corresponding factor.
-
-        Inspired by PyTorch's `MultiStepLR`
+        """Initialize the multi-step scheduler.
 
         Parameters
         ----------
         optimizer
-            An instance of `Optimizer` with a `learning_rate` attribute.
+            An instance of `BaseOptimizer` with a `learning_rate` attribute.
         milestones
             For each milestone, update the learning rate after that many calls
-            to `step`.
-            Specifying the same milestone m times will result in
-            multiplying the learning rate by `gamma` m times at that milestone.
+            to `step`. Specifying the same milestone multiple times multiplies
+            the learning rate repeatedly at that milestone.
         gamma
-            Multiply the learning rate of `optimizer` by `gamma` upon reaching
-            each milestone in `milestones`.
+            Factor by which to multiply the learning rate at each milestone.
         """
         super().__init__(optimizer)
         self.milestones = Counter(milestones)

@@ -1,15 +1,8 @@
-"""Utility functions for defining systems.
+"""Utility functions for adapting ODEs and observation masks for use with
+`BaseSystem`.
 
-Functions
----------
-flatten_ode
-    Given an ODE with shaped inputs, create a flattened version.
-
-mask_from_slice
-    Compute a boolean mask from a slice and the desired shape.
-
-flatten_mask
-    Given a shaped mask, create a flattened version.
+Includes helpers to flatten shaped states/ODEs and build boolean masks from
+slices.
 """
 
 from collections.abc import Callable
@@ -28,15 +21,16 @@ def flatten_ode(
     Parameters
     ----------
     ode
-        Callable(params, state) -> time derivative of state. The `state` the
-        callable expects has shape `shape`.
+        Callable '(params, state) -> state_dot'. The 'state' argument is
+        expected to have shape 'shape'.
     shape
-        Shape of the state expected by `ode` (for example, state0.shape).
+        Shape of the state expected by 'ode' (for example 'state0.shape').
 
     Returns
     -------
-    flat_ode
-        Callable(params, flat_state) -> flat time derivative of state.
+    Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
+        A callable '(params, flat_state) -> flat_state_dot' where both the input
+        state and returned derivative are flattened 1-D arrays.
     """
 
     def flat_ode(ps: jndarray, state: jndarray) -> jndarray:
@@ -49,23 +43,25 @@ def mask_from_slice(
     slice_obj: slice | tuple[slice | int, ...],
     shape: tuple[int, ...],
 ) -> jndarray:
-    """Return a flat boolean mask corresponding to `slice_obj`.
+    """Return a flattened boolean mask corresponding to 'slice_obj'.
 
-    For example, the mask can be used as an observation mask over a flattened
-    state.
+    The returned mask is a 1-D boolean 'jnp.ndarray' of length equal to the
+    product of 'shape' dimensions and can be used as an observation mask for a
+    flattened state.
 
     Parameters
     ----------
     slice_obj
-        A slice or a tuple of slices and/or integers to index a state of the
-        given shape
+        A slice or a tuple of slices and/or integers to index an array of shape
+        'shape'.
     shape
-        Shape of the state that `slice_obj` indexes (for example, state0.shape).
+        Shape of the array that 'slice_obj' indexes (for example,
+        'state0.shape').
 
     Returns
     -------
-    mask
-        1D boolean mask of length prod(shape)
+    jnp.ndarray
+        1-D boolean mask where indexed positions are True.
     """
     mask = jnp.full(shape, False, dtype=bool)
     mask = mask.at[slice_obj].set(True)
@@ -77,17 +73,14 @@ def flatten_mask(
 ) -> jndarray:
     """Return a flattened boolean mask.
 
-    For example, the mask can be used as an observation mask over a flattened
-    state.
-
     Parameters
     ----------
     mask
-        Boolean mask for a state of the given shape
+        Boolean mask for an array of some shape.
 
     Returns
     -------
-    flat_mask
-        1D boolean mask (mask.ravel())
+    jnp.ndarray
+        Flattened 1-D boolean mask ('mask.ravel()').
     """
     return mask.ravel()

@@ -1,3 +1,12 @@
+"""Explicit and wrapped ODE solvers for time integration.
+
+This module provides a small collection of time-integration algorithms used
+by the `otf` package: simple single-step and multistage integrators (e.g.
+`ForwardEuler`, `RK4`), multistep Adams methods, and a `SolveIvp` wrapper
+around `scipy.integrate.solve_ivp` that matches the solver interface used in
+this package.
+"""
+
 from functools import partial
 
 import scipy
@@ -51,14 +60,30 @@ class ForwardEuler(SinglestepSolver):
 
 
 class TwoStepAdamsBashforth(MultistepSolver):
+    """Two-step explicit Adams–Bashforth multistep integrator.
+
+    This class implements the classical two-step Adams–Bashforth method for
+    explicit integration of the nonlinear terms. A `pre_multistep_solver` may
+    be provided to generate initial steps when starting the integration. If
+    `pre_multistep_solver` is `None`, callers must supply the required two
+    initial history states when invoking `solve`/`solve_true`.
+    """
+
     _k = 2
 
-    def __init__(self, system: BaseSystem, pre_multistep_solver: BaseSolver):
-        """Two-step Adams–Bashforth solver.
+    def __init__(
+        self, system: BaseSystem, pre_multistep_solver: BaseSolver | None = None
+    ):
+        """Initialize the two-step Adams–Bashforth solver.
 
-        See documentation of `base_solver.MultistepSolver`.
-
-        See https://en.wikipedia.org/wiki/Linear_multistep_method#Two-step_Adams%E2%80%93Bashforth
+        Parameters
+        ----------
+        system
+            The system to integrate.
+        pre_multistep_solver
+            Optional solver used to produce initial steps until two history
+            values are available. If `None`, callers must provide the two
+            initial states when starting integration.
         """
 
         super().__init__(system, pre_multistep_solver)
@@ -100,14 +125,30 @@ class TwoStepAdamsBashforth(MultistepSolver):
 
 
 class FourStepAdamsBashforth(MultistepSolver):
+    """Four-step Adams–Bashforth explicit multistep integrator.
+
+    Requires a `pre_multistep_solver` to generate the first three steps when
+    beginning integration, or callers must supply the initial history of
+    four states. `pre_multistep_solver` may be passed as `None` in which case
+    the caller is responsible for providing the required initial history when
+    invoking `solve`/`solve_true`.
+    """
+
     _k = 4
 
-    def __init__(self, system: BaseSystem, pre_multistep_solver: BaseSolver):
-        """Four-step Adams–Bashforth solver.
+    def __init__(
+        self, system: BaseSystem, pre_multistep_solver: BaseSolver | None = None
+    ):
+        """Initialize the four-step Adams–Bashforth solver.
 
-        See documentation of `base_solver.MultistepSolver`.
-
-        https://en.wikipedia.org/wiki/Linear_multistep_method#Adams%E2%80%93Bashforth_methods
+        Parameters
+        ----------
+        system
+            The system to integrate.
+        pre_multistep_solver
+            Optional solver used to produce initial steps until four history
+            values are available. If `None`, callers must provide the four
+            initial states when starting integration.
         """
 
         super().__init__(system, pre_multistep_solver)
@@ -230,35 +271,30 @@ class RK4(MultistageSolver):
 
 
 class SolveIvp(MultistageSolver):
+    """`scipy.integrate.solve_ivp` wrapper matching the solver interface.
+
+    This adapter lets users employ SciPy's `solve_ivp` while keeping the same
+    external `solve`/`solve_true` signatures used across other solvers in this
+    package. Note that integration is performed in NumPy/SciPy (not JAX).
+    """
+
     def __init__(self, system: BaseSystem, options: dict = dict()):
-        """Wrapper around `scipy.integrate.solve_ivp` implementing the same
-        external interface as `MultistageSolver`.
-
-        Note that this class does not use or implement all methods defined in
-        its parent class since it uses `solve_ivp` (instead of a custom
-        implementation of an ODE-solving algorithm using jax).
-
-        See documentation of `MultistageSolver`.
+        """Initialize the SolveIvp adapter.
 
         Parameters
         ----------
         system
             An instance of `BaseSystem` to simulate forward in time.
         options
-            Optional arguments that will be passed directly to `solve_ivp`
+            Optional keyword arguments that are passed directly to
+            `scipy.integrate.solve_ivp`.
 
-        Methods
-        -------
-        solve
-            Simulate `self.system` forward in time.
-
-        Attributes
-        ----------
-        system
-            The `system` passed to `__init__`; read-only
-        options
-            The `options` passed to `__init__`, but may be modified at any time
+        Notes
+        -----
+        Integration is performed by SciPy (NumPy), not JAX. The `options`
+        dictionary may be modified after initialization.
         """
+
         self._system = system
         self.options = options
 
