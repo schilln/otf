@@ -45,7 +45,9 @@ def run_update(
         true0, assimilated0 = true[-1], assimilated[-1]
 
         # Update parameters
-        system.cs = optimizer(true0[system.true_observed_mask], assimilated0)
+        system.cs = optimizer(
+            true0[None, system.true_observed_mask], assimilated0[None, :]
+        )
         cs.append(system.cs)
 
         t0 = tls[-1]
