@@ -17,35 +17,33 @@ def get_dirs(
     standard_deviation: ndarray | None = None,
     seed: int | None = None,
 ) -> ndarray:
-    """Select random directions in parameter values.
+    """Sample two unit direction vectors in parameter space.
 
-    Select directions from normal distribution with given mean and standard
-    deviation, then scale each direction vector to have unit length.
+    The vectors are drawn from a normal distribution with the given mean and
+    standard deviation, then normalized to unit length.
 
-    If no standard deviation is given, use the absolute values of `mean` so that
-    samples tend to differ from the mean by the same relative amounts.
+    If `standard_deviation` is not provided, the absolute value of `mean` is
+    used, with zeros replaced by one so the samples still vary.
 
     Parameters
     ----------
     mean
-        Mean of normal distribution from which to sample directions
+        Mean of the normal distribution used to sample directions.
 
         shape (m,) where m is number of parameters
     standard_deviation
-        Standard deviation of normal distribution from which to sample
-        directions. If None, will default to the absolute values of `mean` or to
-        one anywhere `mean` is zero.
+        Standard deviation of the sampling distribution. If `None`, defaults to
+        `abs(mean)`, with zeros replaced by one.
 
         shape (m,) where m is number of parameters
     seed
-        Seed with which to initialize random number generator. If None, no fixed
-        seed will be used, so results will vary from call to call.
+        Seed for the random number generator. If `None`, results vary between
+        calls.
 
     Returns
     -------
     dirs
-        Direction vectors which may be used to define domain on which to compute
-        and plot error surface
+        Direction vectors used to define the error-surface domain.
 
         shape (2, m) where m is number of parameters
     """
@@ -80,34 +78,48 @@ def get_surface(
     x_relative_bound: float | tuple[float, float] = 1,
     y_relative_bound: float | tuple[float, float] = 1,
 ) -> tuple[ndarray, ndarray, ndarray]:
-    """Compute an error surface.
+    """Compute an error surface over a 2D grid of parameter perturbations.
 
     Parameters
     ----------
+    system
+        The system to simulate. If `system.cs` exists it will be temporarily
+        replaced while computing the surface.
+    true_observed
+        Observations used by the assimilation procedure.
+    assimilated_solver
+        Time-integration solver used for the assimilated (estimated) trajectory.
+    dt
+        Time step for the solver.
+    T0, Tf
+        Initial and final times for the simulation window.
+    assimilated0
+        Initial state for the assimilated system.
     cs_center
-        Parameter values to use as center for grid of simulations
-
-        shape (m,) where m is number of parameters
+        Center parameter values around which to form the grid (shape (m,)).
     dirs
-        Direction vectors defining domain for computing error surface
-
-        shape (2, m) where m is number of parameters
+        Two direction vectors that span the 2D plane of perturbations (shape (2,
+        m)).
+    true_actual
+        Optional true state used when computing error; if provided it will be
+        forwarded to the update routine.
     xn, yn
-        Number of grid points to simulate system on in respective direction,
-        i.e., simulate on grid of shape (xn, yn)
+        Number of grid points along the first and second direction axes.
     x_relative_bound, y_relative_bound
-        Maximum relative step size in each random direction
+        Relative bounds for grid sampling. If a single float is provided it is
+        interpreted as (-value, value).
 
     Returns
     -------
     errors
-        Grid of relative errors, shape (yn, xn)
+        2D array of relative errors with shape (yn, xn).
     xls, yls
-        Grid of coordinates relative to `dirs`, shapes (xn,) and (yn,)
+        1D coordinate arrays for grid axes corresponding to the two directions
+        (shapes (xn,) and (yn,)).
 
     Notes
     -----
-    This calls `utils.run_update(..., t_relax=Tf)` to effectively disable
+    This calls `utils.run_update(..., t_relax=Tf)` which effectively disables
     parameter updates while computing the surface.
     """
     if cs_center.ndim != 1:
@@ -181,21 +193,45 @@ def get_trajectory(
     dirs: ndarray,
     run_update_options: dict = dict(),
 ) -> tuple[ndarray, ndarray]:
-    """Compute sequence of parameter values relative to `dirs` during one
-    simulation of system with updates provided by `optimizer`.
+    """Compute parameter update trajectory and coordinates in a 2D basis.
+
+    The function runs a single assimilation/optimization simulation using
+    `utils.run_update` and returns the sequence of parameter vectors along with
+    their 2D coordinates expressed in the `dirs` basis relative to `cs_center`.
+
+    Parameters
+    ----------
+    system
+        The system to simulate.
+    true_observed
+        Observations used by the assimilation procedure.
+    assimilated_solver
+        Time-integration solver for the assimilated trajectory.
+    dt
+        Time step for the solver.
+    T0, Tf
+        Initial and final times for the simulation window.
+    t_relax
+        Relaxation time passed to `run_update` controlling update behavior.
+    assimilated0
+        Initial state for the assimilated system.
+    optimizer
+        Optimizer instance that performs parameter updates.
+    cs_center
+        Center parameter values used to compute relative coordinates (shape
+        (m,)).
+    dirs
+        Two direction vectors spanning the 2D coordinate basis (shape (2, m)).
+    run_update_options
+        Additional keyword arguments forwarded to `utils.run_update`.
 
     Returns
     -------
     cs
-        The sequence of parameter values
-
-        shape (N + 1, d) where d is the number of parameters being estimated and
-        N is the number of parameter updates performed (the first row is the
-        initial set of parameter values).
+        Array of parameter vectors recorded during the run (shape (N+1, d)).
     cs_coordinates
-        Sequence of positions of `cs` values relative to `dirs`
-
-        shape (N + 1, 2) where N is number of iterations
+        Array of 2D coordinates of the parameter vectors in the `dirs` basis
+        (shape (N+1, 2)).
     """
     cs, *_ = utils.run_update(
         system,
@@ -305,6 +341,21 @@ def get_relative_position_from_cs(
 def plot_surface(
     fig, ax, errors: ndarray, xls: ndarray, yls: ndarray, levels: int = 20
 ):
+    """Plot an error surface as a filled contour on the given axes.
+
+    Parameters
+    ----------
+    fig
+        Matplotlib `Figure` instance that will receive the colorbar.
+    ax
+        Matplotlib `Axes` on which to draw the contour plot.
+    errors
+        2D array of error values with shape (yn, xn).
+    xls, yls
+        1D coordinate arrays for the x and y axes.
+    levels
+        Number of contour levels to use.
+    """
     cmap = mpl.cm.viridis
 
     cf = ax.contourf(xls, yls, errors, levels=levels, cmap=cmap)
@@ -313,6 +364,20 @@ def plot_surface(
 
 
 def plot_trajectory(fig, ax, cs_coordinates: ndarray):
+    """Plot a parameter-update trajectory in the 2D `dirs` coordinate plane.
+
+    The trajectory is drawn as a colored line whose color encodes the update
+    step index. The initial point is highlighted with a red marker.
+
+    Parameters
+    ----------
+    fig
+        Matplotlib `Figure` used to add the colorbar.
+    ax
+        Matplotlib `Axes` on which to draw the trajectory.
+    cs_coordinates
+        Array of 2D coordinates for parameter vectors (shape (N, 2)).
+    """
     cmap = mpl.cm.magma
     xs, ys = cs_coordinates.T
 
