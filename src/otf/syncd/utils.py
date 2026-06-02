@@ -254,9 +254,7 @@ def _run_update_multistep(
 
     # Update parameters
     if t_begin_updates is None or t_begin_updates <= tf:
-        system.cs = optimizer(
-            true[:, system.true_observed_mask], assimilated
-        )
+        system.cs = optimizer(true[:, system.true_observed_mask], assimilated)
         lr_scheduler.step()
     cs.append(system.cs)
 
